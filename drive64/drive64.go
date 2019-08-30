@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/ziutek/ftdi"
@@ -14,6 +15,7 @@ import (
 var (
 	ErrNoDevices       = errors.New("no 64drive devices found")
 	ErrMultipleDevices = errors.New("multiple 64drive devices found")
+	ErrFrozen          = errors.New("64drive seems frozen, please reset it")
 )
 
 // VendorIDs used by 64drive (actually, FTDI)
@@ -40,7 +42,10 @@ func (d *DeviceDesc) Open() (*Device, error) {
 	if err == nil {
 		err = usb.SetBitmode(0xFF, ftdi.ModeSyncFF)
 	}
-	return &Device{usb: usb}, err
+	if err == nil {
+		err = usb.PurgeBuffers()
+	}
+	return &Device{usb: drive64Device{usb}}, err
 }
 
 // Enumerate returns a list of all 64drive devices found attached to this system
@@ -68,14 +73,33 @@ func Enumerate() []DeviceDesc {
 	return devices
 }
 
-type Device struct {
-	usb *ftdi.Device
+type drive64Device struct {
+	*ftdi.Device
 }
 
-// DeviceNewSingle opens a connected 64drive device, that must be the only one
+func (d *drive64Device) Read(buf []byte) (int, error) {
+	// Sometimes, Drive64 is busy and FTDI returns 0-byte reads from USB.
+	// This does not conform with Go io.Reader protocol (eg: they make
+	// io.ReadFull stuck), so we want to retry a few times, and eventually
+	// return a busy error.
+	for retry := 0; retry < 5; retry++ {
+		n, err := d.Device.Read(buf)
+		if n == 0 && err == nil {
+			continue
+		}
+		return n, err
+	}
+	return 0, ErrFrozen
+}
+
+type Device struct {
+	usb drive64Device
+}
+
+// NewDeviceSingle opens a connected 64drive device, that must be the only one
 // connected to this PC. If multiple devices are found, it returns ErrMultipleDevices.
 // If no devices are found, it returns ErrNoDevices.
-func DeviceNewSingle() (*Device, error) {
+func NewDeviceSingle() (*Device, error) {
 	devs := Enumerate()
 	if len(devs) == 0 {
 		return nil, ErrNoDevices
@@ -86,9 +110,9 @@ func DeviceNewSingle() (*Device, error) {
 	return devs[0].Open()
 }
 
-// DeviceNewBySerial opens a specified 64drive, identified by its serial number.
+// NewDeviceBySerial opens a specified 64drive, identified by its serial number.
 // If no device is found, ErrNoDevices is returned.
-func DeviceNewBySerial(serial string) (*Device, error) {
+func NewDeviceBySerial(serial string) (*Device, error) {
 	for _, d := range Enumerate() {
 		if d.Serial == serial {
 			return d.Open()
@@ -97,54 +121,14 @@ func DeviceNewBySerial(serial string) (*Device, error) {
 	return nil, ErrNoDevices
 }
 
-// Cmd is the type of a 64drive command send through USB
-type Cmd byte
-
-const (
-	// CmdLoadFromPc loads a bank of data from PC
-	CmdLoadFromPc Cmd = 0x20
-	// CmdDumpToPc reads the contents of a bank to the PC
-	CmdDumpToPc Cmd = 0x30
-	// CmdVersionRequest request the hardware and firmware version
-	CmdVersionRequest Cmd = 0x80
-)
-
-// Variant represent the hardware variant (revision)
-type Variant uint16
-
-const (
-	// VarRevA is the HW1, RevA board
-	VarRevA Variant = 0x4100
-	// VarRevB is the HW2, ReVB board
-	VarRevB Variant = 0x4200
-)
-
-// Version is the FPGA configuration revision number (firmware version)
-type Version uint16
-
-func (v Version) String() string {
-	return fmt.Sprintf("%d.%02d", v/100, v%100)
-}
-
-func (v Variant) String() string {
-	switch v {
-	case VarRevA:
-		return "HW1 (Rev A)"
-	case VarRevB:
-		return "HW2 (Rev B)"
-	default:
-		return fmt.Sprintf("UNKVAR (%02x)", uint16(v))
-	}
-}
-
 // Close closes an open 64drive device
 func (d *Device) Close() error {
 	return d.usb.Close()
 }
 
 // SendCmd sends a raw command to 64drive. This is a low-level method, most
-// clients should use one of the SendCmd* methods.
-func (d *Device) SendCmd(cmd Cmd, args []uint32, out []byte) error {
+// clients should use one of the Cmd* methods.
+func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 	var buf bytes.Buffer
 	var abuf [4]byte
 
@@ -152,6 +136,9 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, out []byte) error {
 	for _, a := range args {
 		binary.BigEndian.PutUint32(abuf[:], a)
 		buf.Write(abuf[:])
+	}
+	if len(in) != 0 {
+		buf.Write(in)
 	}
 	if n, err := d.usb.Write(buf.Bytes()); err != nil {
 		return err
@@ -161,11 +148,11 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, out []byte) error {
 	}
 
 	if len(out) > 0 {
-		if _, err := io.ReadFull(d.usb, out); err != nil {
+		if _, err := io.ReadFull(&d.usb, out); err != nil {
 			return err
 		}
 	}
-	if _, err := io.ReadFull(d.usb, abuf[:]); err != nil {
+	if _, err := io.ReadFull(&d.usb, abuf[:]); err != nil {
 		return err
 	}
 	if abuf[0] != 0x43 || abuf[1] != 0x4D || abuf[2] != 0x50 || abuf[3] != byte(cmd) {
@@ -177,13 +164,57 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, out []byte) error {
 // SendCmdVersionRequest gets the 64drive hardware and firmware version, and a magic ID that identifies
 // the device (it is used during firmware upgrades to make sure that the firmware being uploaded is designed
 // for this device).
-func (d *Device) SendCmdVersionRequest() (hwver Variant, fwver Version, magic uint32, err error) {
+func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic uint32, err error) {
 	var res [8]byte
-	if err = d.SendCmd(CmdVersionRequest, nil, res[:]); err != nil {
+	if err = d.SendCmd(CmdVersionRequest, nil, nil, res[:]); err != nil {
 		return
 	}
 	hwver = Variant(binary.BigEndian.Uint16(res[0:2]))
 	fwver = Version(binary.BigEndian.Uint16(res[2:4]))
 	magic = binary.BigEndian.Uint32(res[4:8])
 	return
+}
+
+func (d *Device) IdealChunkSize(size int64) int {
+	switch {
+	case size >= 16*1024*1024:
+		return 32 * 128 * 1024
+	case size >= 2*1024*1024:
+		return 16 * 128 * 1024
+	default:
+		return 4 * 128 * 1024
+	}
+}
+
+func (d *Device) CmdUpload(r io.Reader, chunkSize int, bank Bank, bs ByteSwapper) error {
+	var cmdargs [2]uint32
+
+	d.usb.SetWriteChunkSize(chunkSize)
+	for {
+		buf := make([]byte, chunkSize)
+		n, err := io.ReadFull(r, buf)
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		if err = bs.ByteSwap(buf); err != nil {
+			return err
+		}
+
+		cmdargs[1] = uint32(bank)<<24 | uint32(n)
+		if err := d.SendCmd(CmdLoadFromPc, cmdargs[:], buf, nil); err != nil {
+			return err
+		}
+		cmdargs[0] += uint32(n)
+	}
+}
+
+func (d *Device) CmdUploadFile(f *os.File, bank Bank, bs ByteSwapper) error {
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	return d.CmdUpload(f, d.IdealChunkSize(fi.Size()), bank, bs)
 }
