@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/ziutek/ftdi"
@@ -45,7 +44,7 @@ func (d *DeviceDesc) Open() (*Device, error) {
 	if err == nil {
 		err = usb.PurgeBuffers()
 	}
-	return &Device{usb: drive64Device{usb}}, err
+	return &Device{usb: drive64Device{usb}, desc: *d}, err
 }
 
 // Enumerate returns a list of all 64drive devices found attached to this system
@@ -93,7 +92,8 @@ func (d *drive64Device) Read(buf []byte) (int, error) {
 }
 
 type Device struct {
-	usb drive64Device
+	usb  drive64Device
+	desc DeviceDesc
 }
 
 // NewDeviceSingle opens a connected 64drive device, that must be the only one
@@ -119,6 +119,11 @@ func NewDeviceBySerial(serial string) (*Device, error) {
 		}
 	}
 	return nil, ErrNoDevices
+}
+
+// Description returns a DeviceDesc that describes the current device
+func (d *Device) Description() DeviceDesc {
+	return d.desc
 }
 
 // Close closes an open 64drive device
@@ -186,8 +191,9 @@ func (d *Device) IdealChunkSize(size int64) int {
 	}
 }
 
-func (d *Device) CmdUpload(r io.Reader, chunkSize int, bank Bank, bs ByteSwapper) error {
+func (d *Device) CmdUpload(r io.Reader, chunkSize int, bank Bank, offset uint32, bs ByteSwapper) error {
 	var cmdargs [2]uint32
+	cmdargs[0] = offset
 
 	d.usb.SetWriteChunkSize(chunkSize)
 	for {
@@ -209,12 +215,4 @@ func (d *Device) CmdUpload(r io.Reader, chunkSize int, bank Bank, bs ByteSwapper
 		}
 		cmdargs[0] += uint32(n)
 	}
-}
-
-func (d *Device) CmdUploadFile(f *os.File, bank Bank, bs ByteSwapper) error {
-	fi, err := f.Stat()
-	if err != nil {
-		return err
-	}
-	return d.CmdUpload(f, d.IdealChunkSize(fi.Size()), bank, bs)
 }

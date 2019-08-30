@@ -10,11 +10,11 @@ type ByteSwapper uint8
 
 const (
 	// BSNone is the no-op byteswapper
-	BSNone ByteSwapper = iota
+	BSNone ByteSwapper = 0
 	// BSTwo byteswaps groups of 2 consecutive bytes in a buffer
-	BSTwo
+	BSTwo ByteSwapper = 2
 	// BSFour byteswaps groups of 4 consecutive bytes in a buffer
-	BSFour
+	BSFour ByteSwapper = 4
 )
 
 var (

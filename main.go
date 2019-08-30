@@ -14,12 +14,24 @@ import (
 )
 
 var (
-	flagVerbose bool
-	flagOffset  uint
-	flagSize    uint
-	flagBank    string
-	flagQuiet   bool
+	flagVerbose  bool
+	flagOffset   uint32
+	flagSize     uint
+	flagBank     string
+	flagQuiet    bool
+	flagByteswap int
 )
+
+func printf(s string, args ...interface{}) {
+	if !flagQuiet {
+		fmt.Printf(s, args...)
+	}
+}
+func vprintf(s string, args ...interface{}) {
+	if flagVerbose {
+		printf(s, args...)
+	}
+}
 
 func flagBankParse() (drive64.Bank, error) {
 	switch flagBank {
@@ -47,19 +59,13 @@ func cmdList(cmd *cobra.Command, args []string) error {
 		return errors.New("no 64drive devices found")
 	}
 
-	if !flagQuiet {
-		fmt.Printf("Found %d 64drive device(s):\n", len(devices))
-	}
+	printf("Found %d 64drive device(s):\n", len(devices))
 	for i, d := range devices {
-		if !flagQuiet {
-			fmt.Printf(" * %d: %v %v (serial: %v)\n", i, d.Manufacturer, d.Description, d.Serial)
-		}
+		printf(" * %d: %v %v (serial: %v)\n", i, d.Manufacturer, d.Description, d.Serial)
 		if flagVerbose {
 			if dev, err := d.Open(); err == nil {
 				if hwver, fwver, _, err := dev.CmdVersionRequest(); err == nil {
-					if !flagQuiet {
-						fmt.Printf("   -> Hardware: %v, Firmware: %v", hwver, fwver)
-					}
+					printf("   -> Hardware: %v, Firmware: %v", hwver, fwver)
 				} else {
 					return err
 				}
@@ -83,24 +89,35 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer dev.Close()
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
 
 	bank, err := flagBankParse()
 	if err != nil {
 		return err
 	}
+	vprintf("upload bank: %v\n", bank)
 
-	var magic [4]byte
-	f.Read(magic[:])
-	bs, err := drive64.ByteSwapDetect(magic[:])
-	if err != nil {
-		return err
+	var bs drive64.ByteSwapper
+	if flagByteswap < 0 {
+		var magic [4]byte
+		f.ReadAt(magic[:], 0)
+		bs, err = drive64.ByteSwapDetect(magic[:])
+		if err != nil {
+			return err
+		}
+	} else if flagByteswap == 0 || flagByteswap == 2 || flagByteswap == 4 {
+		bs = drive64.ByteSwapper(flagByteswap)
+	} else {
+		return errors.New("invalid byteswap value")
 	}
-	f.Seek(0, io.SeekStart)
+	vprintf("byteswap: %v\n", bs)
 
 	fi, err := f.Stat()
 	if err != nil {
 		return err
 	}
+	vprintf("size: %v\n", fi.Size())
+	vprintf("offset: %v\n", flagOffset)
 
 	var pbw io.Writer
 	pbw = os.Stdout
@@ -118,8 +135,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		pw.CloseWithError(ioerr)
 	}()
 
-	//dev.IdealChunkSize(fi.Size())
-	return dev.CmdUpload(pr, 512*1024, bank, bs)
+	return dev.CmdUpload(pr, dev.IdealChunkSize(fi.Size()), bank, flagOffset, bs)
 }
 
 func main() {
@@ -142,9 +158,11 @@ func main() {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 	}
-	cmdUpload.Flags().UintVarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
+	cmdUpload.Flags().Uint32VarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
 	cmdUpload.Flags().UintVarP(&flagSize, "size", "s", 0, "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded (default: rom)")
+	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdUpload.Flags().IntVarP(&flagByteswap, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit (default: autodetect)")
 
 	var rootCmd = &cobra.Command{Use: "g64drive"}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
