@@ -1,6 +1,11 @@
-.PHONY: all linux
+.PHONY: release linux
 
 all:
+	@echo "Usage:"
+	@echo "•  make release    - build release binary on Mac"
+	@echo "•  make linux      - build release binary on Linux through Docker"
+
+release:
 	go build -ldflags '-s -w'
 	upx --quiet --quiet --lzma g64drive
 
