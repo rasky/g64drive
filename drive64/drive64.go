@@ -180,7 +180,7 @@ func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic uint32
 	return
 }
 
-func (d *Device) IdealChunkSize(size int64) int {
+func idealChunkSize(size int64) int {
 	switch {
 	case size >= 16*1024*1024:
 		return 32 * 128 * 1024
@@ -191,14 +191,20 @@ func (d *Device) IdealChunkSize(size int64) int {
 	}
 }
 
-func (d *Device) CmdUpload(r io.Reader, chunkSize int, bank Bank, offset uint32, bs ByteSwapper) error {
+func (d *Device) CmdUpload(r io.Reader, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
 	var cmdargs [2]uint32
 	cmdargs[0] = offset
 
-	d.usb.SetWriteChunkSize(chunkSize)
-	for {
-		buf := make([]byte, chunkSize)
-		n, err := io.ReadFull(r, buf)
+	chunkSize := idealChunkSize(n)
+	d.usb.SetWriteChunkSize(chunkSize + 12)
+
+	for n != 0 {
+		sz := chunkSize
+		if n > 0 && int64(sz) > n {
+			sz = int(n)
+		}
+		buf := make([]byte, sz)
+		read, err := io.ReadFull(r, buf)
 		if err != nil {
 			if err == io.EOF {
 				return nil
@@ -209,10 +215,48 @@ func (d *Device) CmdUpload(r io.Reader, chunkSize int, bank Bank, offset uint32,
 			return err
 		}
 
-		cmdargs[1] = uint32(bank)<<24 | uint32(n)
+		cmdargs[1] = uint32(bank)<<24 | uint32(read)
 		if err := d.SendCmd(CmdLoadFromPc, cmdargs[:], buf, nil); err != nil {
 			return err
 		}
-		cmdargs[0] += uint32(n)
+		cmdargs[0] += uint32(read)
+		n -= int64(read)
 	}
+
+	return nil
+}
+
+func (d *Device) CmdDownload(w io.Writer, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
+	var cmdargs [2]uint32
+	cmdargs[0] = offset
+
+	chunkSize := idealChunkSize(n)
+	d.usb.SetReadChunkSize(chunkSize)
+	for n > 0 {
+		sz := chunkSize
+		if int64(sz) > n {
+			sz = int(n)
+		}
+		buf := make([]byte, sz)
+		cmdargs[1] = uint32(bank)<<24 | uint32(sz)
+		if err := d.SendCmd(CmdDumpToPc, cmdargs[:], nil, buf); err != nil {
+			return err
+		}
+
+		if err := bs.ByteSwap(buf); err != nil {
+			return err
+		}
+
+		read, err := w.Write(buf)
+		if err != nil {
+			return err
+		} else if read != len(buf) {
+			panic("provided writer does not respect io.Writer interface")
+		}
+
+		cmdargs[0] += uint32(read)
+		n -= int64(read)
+	}
+
+	return nil
 }

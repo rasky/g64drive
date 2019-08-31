@@ -16,7 +16,7 @@ import (
 var (
 	flagVerbose  bool
 	flagOffset   uint32
-	flagSize     uint
+	flagSize     int64
 	flagBank     string
 	flagQuiet    bool
 	flagByteswap int
@@ -112,11 +112,18 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	}
 	vprintf("byteswap: %v\n", bs)
 
-	fi, err := f.Stat()
-	if err != nil {
-		return err
+	size := flagSize
+	if size < 0 {
+		return errors.New("invalid size value")
 	}
-	vprintf("size: %v\n", fi.Size())
+	if size == 0 {
+		fi, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		size = fi.Size()
+	}
+	vprintf("size: %v\n", size)
 	vprintf("offset: %v\n", flagOffset)
 
 	var pbw io.Writer
@@ -124,7 +131,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	if flagQuiet {
 		pbw = ioutil.Discard
 	}
-	pb := progressbar.NewOptions64(fi.Size(),
+	pb := progressbar.NewOptions64(size,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetDescription(filepath.Base(args[0])),
 		progressbar.OptionSetWriter(pbw))
@@ -135,9 +142,56 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		pw.CloseWithError(ioerr)
 	}()
 
-	return dev.CmdUpload(pr, dev.IdealChunkSize(fi.Size()), bank, flagOffset, bs)
+	return dev.CmdUpload(pr, size, bank, flagOffset, bs)
 }
 
+func cmdDownload(cmd *cobra.Command, args []string) error {
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+
+	bank, err := flagBankParse()
+	if err != nil {
+		return err
+	}
+	vprintf("download bank: %v\n", bank)
+
+	var bs drive64.ByteSwapper
+	if flagByteswap == 0 || flagByteswap == 2 || flagByteswap == 4 {
+		bs = drive64.ByteSwapper(flagByteswap)
+	} else {
+		return errors.New("invalid byteswap value")
+	}
+	vprintf("byteswap: %v\n", bs)
+
+	f, err := os.Create(args[0])
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	size := flagSize
+	if size < 0 {
+		return errors.New("invalid size value")
+	}
+	vprintf("size: %v\n", size)
+	vprintf("offset: %v\n", flagOffset)
+
+	var pbw io.Writer
+	pbw = os.Stdout
+	if flagQuiet {
+		pbw = ioutil.Discard
+	}
+	pb := progressbar.NewOptions64(int64(size),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetDescription(filepath.Base(args[0])),
+		progressbar.OptionSetWriter(pbw))
+
+	return dev.CmdDownload(io.MultiWriter(f, pb), size, bank, flagOffset, bs)
+}
 func main() {
 	var cmdList = &cobra.Command{
 		Use:          "list",
@@ -159,13 +213,29 @@ func main() {
 		SilenceUsage: true,
 	}
 	cmdUpload.Flags().Uint32VarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
-	cmdUpload.Flags().UintVarP(&flagSize, "size", "s", 0, "size of data to upload (default: file size)")
+	cmdUpload.Flags().Int64VarP(&flagSize, "size", "s", 0, "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswap, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
+	var cmdDownload = &cobra.Command{
+		Use:          "download [file]",
+		Aliases:      []string{"d"},
+		Short:        "download data from 64drive",
+		Long:         `Download a binary file from 64drive, on the specified bank`,
+		RunE:         cmdDownload,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdDownload.Flags().Uint32VarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
+	cmdDownload.Flags().Int64VarP(&flagSize, "size", "s", 0, "size of data to download")
+	cmdDownload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
+	cmdDownload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdDownload.Flags().IntVarP(&flagByteswap, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
+	cmdDownload.MarkFlagRequired("size")
+
 	var rootCmd = &cobra.Command{Use: "g64drive"}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload)
 	rootCmd.Execute()
 }
