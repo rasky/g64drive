@@ -160,9 +160,9 @@ func main() {
 	}
 	cmdUpload.Flags().Uint32VarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
 	cmdUpload.Flags().UintVarP(&flagSize, "size", "s", 0, "size of data to upload (default: file size)")
-	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded (default: rom)")
+	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
-	cmdUpload.Flags().IntVarP(&flagByteswap, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit (default: autodetect)")
+	cmdUpload.Flags().IntVarP(&flagByteswap, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
 	var rootCmd = &cobra.Command{Use: "g64drive"}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
