@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ var (
 	flagVerbose   bool
 	flagOffset    sizeUnit
 	flagSize      sizeUnit
+	flagAutoCic   bool
 	flagBank      string
 	flagQuiet     bool
 	flagByteswapD int
@@ -185,7 +187,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	}
 	vprintf("size: %v\n", size)
 
-	var offset = uint32(flagOffset.size)
+	offset := uint32(flagOffset.size)
 	vprintf("offset: %v\n", offset)
 
 	var pbw io.Writer
@@ -203,9 +205,25 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		pw.CloseWithError(ioerr)
 	}()
 
-	return safeSigIntContext(func(ctx context.Context) error {
+	if err := safeSigIntContext(func(ctx context.Context) error {
 		return dev.CmdUpload(ctx, pr, size, bank, offset, bs)
-	})
+	}); err != nil {
+		return err
+	}
+
+	if flagAutoCic {
+		cic, err := cicAutodetect(dev)
+		if err != nil {
+			return err
+		}
+		vprintf("\nAutoset CIC type: %v", cic)
+
+		if err := dev.CmdSetCicType(cic); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func cmdDownload(cmd *cobra.Command, args []string) error {
@@ -258,6 +276,44 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 		return dev.CmdDownload(ctx, io.MultiWriter(f, pb), size, bank, offset, bs)
 	})
 }
+
+func cicAutodetect(dev *drive64.Device) (drive64.CIC, error) {
+	var header bytes.Buffer
+	if err := dev.CmdDownload(context.Background(), &header, 0x1000,
+		drive64.BankCARTROM, 0, drive64.BSNone); err != nil {
+		return 0, err
+	}
+	return drive64.NewCICFromHeader(header.Bytes())
+}
+
+func cmdCic(cmd *cobra.Command, args []string) error {
+	var cic drive64.CIC
+	if args[0] != "auto" {
+		var err error
+		if cic, err = drive64.NewCICFromString(args[0]); err != nil {
+			return err
+		}
+	}
+
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+
+	if args[0] == "auto" {
+		var err error
+		if cic, err = cicAutodetect(dev); err != nil {
+			return err
+		}
+	}
+
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+	vprintf("CIC type: %v\n", cic)
+
+	return dev.CmdSetCicType(cic)
+}
+
 func main() {
 	var cmdList = &cobra.Command{
 		Use:          "list",
@@ -281,6 +337,7 @@ func main() {
 	cmdUpload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory at which the file will be uploaded")
 	cmdUpload.Flags().VarP(&flagSize, "size", "s", "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
+	cmdUpload.Flags().BoolVarP(&flagAutoCic, "autocic", "c", false, "sets CIC automatically after upload (same as \"g64drive cic auto\"")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
@@ -300,10 +357,28 @@ func main() {
 	cmdDownload.Flags().IntVarP(&flagByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
 	cmdDownload.MarkFlagRequired("size")
 
+	var cmdCic = &cobra.Command{
+		Use:     "cic [type]",
+		Aliases: []string{"c"},
+		Short:   "change the CIC emulated variant",
+		Long: `Change the variant of CIC that the 64drive emulates, possibly autodetecting it from the current ROM header.
+The variant type can be specified using its name, such as "6103". By specifying "auto", the current ROM header
+will be transferred from 64drive and analyzed, and the correct CIC variant will be automatically selected.`,
+		Example: `  g64drive cic 6105     
+    -- sets CIC emulation to the 6105 variant.  
+
+  g64drive cic auto
+    -- autodetect and set CIC type from the currently-loaded ROM header.`,
+		RunE:         cmdCic,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdCic.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+
 	var rootCmd = &cobra.Command{
 		Use: "g64drive",
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic)
 	rootCmd.Execute()
 }

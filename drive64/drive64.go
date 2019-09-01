@@ -16,6 +16,7 @@ var (
 	ErrNoDevices       = errors.New("no 64drive devices found")
 	ErrMultipleDevices = errors.New("multiple 64drive devices found")
 	ErrFrozen          = errors.New("64drive seems frozen, please reset it")
+	ErrUnsupported     = errors.New("operation is not supported on this 64drive revision")
 )
 
 // VendorIDs used by 64drive (actually, FTDI)
@@ -167,7 +168,7 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 	return nil
 }
 
-// SendCmdVersionRequest gets the 64drive hardware and firmware version, and a magic ID that identifies
+// CmdVersionRequest gets the 64drive hardware and firmware version, and a magic ID that identifies
 // the device (it is used during firmware upgrades to make sure that the firmware being uploaded is designed
 // for this device).
 func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic uint32, err error) {
@@ -179,6 +180,22 @@ func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic uint32
 	fwver = Version(binary.BigEndian.Uint16(res[2:4]))
 	magic = binary.BigEndian.Uint32(res[4:8])
 	return
+}
+
+// CmdSetCicType configures the 64drive CIC emulation to the specified CIC version.
+// CIC emulation is only available on 64drive HW2/RevB. The function will return
+// ErrUnsupported when executed on HW1/RevA device.
+func (d *Device) CmdSetCicType(cic CIC) error {
+	hwver, _, _, err := d.CmdVersionRequest()
+	if err != nil {
+		return err
+	}
+	if hwver < VarRevB {
+		return ErrUnsupported
+	}
+	var args [1]uint32
+	args[0] = 0x80000000 | uint32(cic)
+	return d.SendCmd(CmdSetCicType, args[:], nil, nil)
 }
 
 func idealChunkSize(size int64) int {
