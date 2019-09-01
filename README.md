@@ -7,8 +7,12 @@ required. Just download it and put it in your `PATH` (eg: `/usr/local/bin`) .
 
 ### Installation (source)
 
-Make sure you have Go 1.12 or newer installed on your system. To download, compile and install
-g64drive from source code, simply run:
+Make sure you have:
+
+ * Go 1.12 or newer
+ * libftdi1-dev
+
+installed on your system. Then, to download and build g64drive from source code, simply run:
 
 ```
     $ GO111MODULE=on go build github.com/rasky/g64drive
@@ -52,8 +56,8 @@ Download data from the CARTROM bank:
  * Upload and download data from any available bank
  * Transparent byteswapping (with autodetection from ROM header)
  * Transparent CIC detection when uploading a ROM
- * Can specify sizes and offsets in decimale, hex, or even kilobytes/megabytes
- * CTRL+C clean shutdown -- doesn't need to power-cycle 64drive after it
+ * Can specify sizes and offsets in decimal, hex, or even kilobytes/megabytes
+ * CTRL+C clean shutdown during upload/download -- doesn't need to power-cycle 64drive after it
  * Shipped as static binary, very easy to install on any Linux and macOS system
 
 What's missing:
