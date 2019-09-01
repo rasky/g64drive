@@ -19,14 +19,15 @@ import (
 )
 
 var (
-	flagVerbose   bool
-	flagOffset    sizeUnit
-	flagSize      sizeUnit
-	flagAutoCic   bool
-	flagBank      string
-	flagQuiet     bool
-	flagByteswapD int
-	flagByteswapU int
+	flagVerbose      bool
+	flagOffset       sizeUnit
+	flagSize         sizeUnit
+	flagAutoCic      bool
+	flagBank         string
+	flagQuiet        bool
+	flagByteswapD    int
+	flagByteswapU    int
+	flagFwExtractOut string
 )
 
 type sizeUnit struct {
@@ -314,6 +315,50 @@ func cmdCic(cmd *cobra.Command, args []string) error {
 	return dev.CmdSetCicType(cic)
 }
 
+func fwCmd(filename string, cb func(rpk *drive64.RPK) error) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	rpk, err := drive64.NewRPKFromReader(f)
+	if err != nil {
+		return err
+	}
+
+	return cb(rpk)
+}
+
+func cmdFirmwareInfo(cmd *cobra.Command, args []string) error {
+	return fwCmd(args[0], func(rpk *drive64.RPK) error {
+		if !flagQuiet {
+			rpk.DumpMetadata()
+		}
+		return nil
+	})
+}
+
+func cmdFirmwareExtract(cmd *cobra.Command, args []string) error {
+	return fwCmd(args[0], func(rpk *drive64.RPK) error {
+		fn := rpk.Metadata.File
+		if flagFwExtractOut != "" {
+			fn = flagFwExtractOut
+		}
+		if err := ioutil.WriteFile(fn, rpk.Asset, 0666); err != nil {
+			return err
+		}
+		printf("Written %q (%d bytes)", fn, len(rpk.Asset))
+		return nil
+	})
+}
+
+func cmdFirmwareUpgrade(cmd *cobra.Command, args []string) error {
+	return fwCmd(args[0], func(rpk *drive64.RPK) error {
+		return errors.New("not yet implemented")
+	})
+}
+
 func main() {
 	var cmdList = &cobra.Command{
 		Use:          "list",
@@ -375,10 +420,49 @@ will be transferred from 64drive and analyzed, and the correct CIC variant will 
 	}
 	cmdCic.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 
+	var cmdFirmwareInfo = &cobra.Command{
+		Use:   "info [file.rpk]",
+		Short: "show information on 64drive firmware file",
+		Example: `  g64drive firmware info 64drive_firm_hw2_205.rpk
+	-- show information on the specified firwmare file.`,
+		RunE:         cmdFirmwareInfo,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+
+	var cmdFirmwareExtract = &cobra.Command{
+		Use:   "extract [file.rpk]",
+		Short: "extract the raw binary firmware",
+		Long: `extract the raw binary firmware contained in the RPK firmware container.
+By default, the original name is used (eg: firmware.bin), but a different file name can be specified`,
+		Example: `  g64drive firmware extract 64drive_firm_hw2_205.rpk
+	-- extract the raw binary firmware from the firmware container.`,
+		RunE:         cmdFirmwareExtract,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdFirmwareExtract.Flags().StringVarP(&flagFwExtractOut, "output", "o", "", "output file (default: original name)")
+
+	var cmdFirmwareUpgrade = &cobra.Command{
+		Use:   "upgrade [file.rpk]",
+		Short: "upgrade 64drive firmware",
+		Example: `  g64drive firmware upgrade 64drive_firm_hw2_205.rpk
+	-- install the firmware upgrade.`,
+		RunE:         cmdFirmwareUpgrade,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+
+	var cmdFirmware = &cobra.Command{
+		Use:   "firmware",
+		Short: "manage firmware/bootloader upgrades",
+	}
+	cmdFirmware.AddCommand(cmdFirmwareUpgrade, cmdFirmwareInfo, cmdFirmwareExtract)
+
 	var rootCmd = &cobra.Command{
 		Use: "g64drive",
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdFirmware)
 	rootCmd.Execute()
 }
