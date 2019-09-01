@@ -102,7 +102,7 @@ type RPK struct {
 		ProductText string `struct:"[64]byte"`
 		Device      string `struct:"[32]byte"`
 		Magic       string `struct:"[16]byte"`
-		Variant     [8]byte
+		Variant     string `struct:"[8]byte"`
 
 		ContentVersion        uint16
 		ContentVersionSpecial uint8
@@ -187,6 +187,7 @@ func (rpk *RPK) DumpMetadata() {
 	dumpField("Product", rpk.Metadata.ProductText)
 	dumpField("Device", rpk.Metadata.Device)
 	dumpField("Magic", rpk.Metadata.Magic)
+	dumpField("Variant", rpk.Metadata.Variant)
 	dumpField("Content Version", rpk.Metadata.ContentVersionText)
 	dumpField("Prerequisites", rpk.Metadata.PrerequisitesText)
 	dumpField("Content Note", rpk.Metadata.ContentNote)
