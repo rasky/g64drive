@@ -14,12 +14,13 @@ import (
 )
 
 var (
-	flagVerbose  bool
-	flagOffset   uint32
-	flagSize     int64
-	flagBank     string
-	flagQuiet    bool
-	flagByteswap int
+	flagVerbose   bool
+	flagOffset    uint32
+	flagSize      int64
+	flagBank      string
+	flagQuiet     bool
+	flagByteswapD int
+	flagByteswapU int
 )
 
 func printf(s string, args ...interface{}) {
@@ -70,6 +71,8 @@ func cmdList(cmd *cobra.Command, args []string) error {
 					return err
 				}
 				dev.Close()
+			} else {
+				return err
 			}
 		}
 	}
@@ -98,15 +101,15 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	vprintf("upload bank: %v\n", bank)
 
 	var bs drive64.ByteSwapper
-	if flagByteswap < 0 {
+	if flagByteswapU < 0 {
 		var magic [4]byte
 		f.ReadAt(magic[:], 0)
 		bs, err = drive64.ByteSwapDetect(magic[:])
 		if err != nil {
 			return err
 		}
-	} else if flagByteswap == 0 || flagByteswap == 2 || flagByteswap == 4 {
-		bs = drive64.ByteSwapper(flagByteswap)
+	} else if flagByteswapU == 0 || flagByteswapU == 2 || flagByteswapU == 4 {
+		bs = drive64.ByteSwapper(flagByteswapU)
 	} else {
 		return errors.New("invalid byteswap value")
 	}
@@ -160,8 +163,8 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 	vprintf("download bank: %v\n", bank)
 
 	var bs drive64.ByteSwapper
-	if flagByteswap == 0 || flagByteswap == 2 || flagByteswap == 4 {
-		bs = drive64.ByteSwapper(flagByteswap)
+	if flagByteswapD == 0 || flagByteswapD == 2 || flagByteswapD == 4 {
+		bs = drive64.ByteSwapper(flagByteswapD)
 	} else {
 		return errors.New("invalid byteswap value")
 	}
@@ -216,7 +219,7 @@ func main() {
 	cmdUpload.Flags().Int64VarP(&flagSize, "size", "s", 0, "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
-	cmdUpload.Flags().IntVarP(&flagByteswap, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
+	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
 	var cmdDownload = &cobra.Command{
 		Use:          "download [file]",
@@ -231,10 +234,12 @@ func main() {
 	cmdDownload.Flags().Int64VarP(&flagSize, "size", "s", 0, "size of data to download")
 	cmdDownload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdDownload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
-	cmdDownload.Flags().IntVarP(&flagByteswap, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
+	cmdDownload.Flags().IntVarP(&flagByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
 	cmdDownload.MarkFlagRequired("size")
 
-	var rootCmd = &cobra.Command{Use: "g64drive"}
+	var rootCmd = &cobra.Command{
+		Use: "g64drive",
+	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
 	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload)
 	rootCmd.Execute()
