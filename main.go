@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 
+	"github.com/c2h5oh/datasize"
 	"github.com/rasky/g64drive/drive64"
 	"github.com/schollz/progressbar/v2"
 	"github.com/spf13/cobra"
@@ -17,13 +19,38 @@ import (
 
 var (
 	flagVerbose   bool
-	flagOffset    uint32
-	flagSize      int64
+	flagOffset    sizeUnit
+	flagSize      sizeUnit
 	flagBank      string
 	flagQuiet     bool
 	flagByteswapD int
 	flagByteswapU int
 )
+
+type sizeUnit struct {
+	size int64
+}
+
+func (s *sizeUnit) String() string {
+	return fmt.Sprintf("%v", s.size)
+}
+func (s *sizeUnit) Set(text string) error {
+	if sz, err := strconv.ParseInt(text, 64, 0); err == nil {
+		s.size = sz
+		return nil
+	}
+
+	var v datasize.ByteSize
+	if err := v.UnmarshalText([]byte(text)); err == nil {
+		s.size = int64(v.Bytes())
+		return nil
+	}
+
+	return errors.New("invalid size")
+}
+func (s *sizeUnit) Type() string {
+	return "int64"
+}
 
 func printf(s string, args ...interface{}) {
 	if !flagQuiet {
@@ -55,6 +82,8 @@ func flagBankParse() (drive64.Bank, error) {
 	}
 }
 
+// safeSigIntContext executes function f with a context which is canceled when CTRL+C is called.
+// This allows to for safe CTRL+C cancelation for functions that can't be aborted at any moment.
 func safeSigIntContext(f func(ctx context.Context) error) error {
 	ctx := context.Background()
 
@@ -143,8 +172,8 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	}
 	vprintf("byteswap: %v\n", bs)
 
-	size := flagSize
-	if size < 0 {
+	size := flagSize.size
+	if size < 0 || size%512 != 0 {
 		return errors.New("invalid size value")
 	}
 	if size == 0 {
@@ -155,7 +184,9 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		size = fi.Size()
 	}
 	vprintf("size: %v\n", size)
-	vprintf("offset: %v\n", flagOffset)
+
+	var offset = uint32(flagOffset.size)
+	vprintf("offset: %v\n", offset)
 
 	var pbw io.Writer
 	pbw = os.Stdout
@@ -163,7 +194,6 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		pbw = ioutil.Discard
 	}
 	pb := progressbar.NewOptions64(size,
-		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetDescription(filepath.Base(args[0])),
 		progressbar.OptionSetWriter(pbw))
 
@@ -174,7 +204,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	}()
 
 	return safeSigIntContext(func(ctx context.Context) error {
-		return dev.CmdUpload(ctx, pr, size, bank, flagOffset, bs)
+		return dev.CmdUpload(ctx, pr, size, bank, offset, bs)
 	})
 }
 
@@ -206,12 +236,14 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 	}
 	defer f.Close()
 
-	size := flagSize
-	if size < 0 {
+	size := flagSize.size
+	if size < 0 || size%512 != 0 {
 		return errors.New("invalid size value")
 	}
 	vprintf("size: %v\n", size)
-	vprintf("offset: %v\n", flagOffset)
+
+	var offset = uint32(flagOffset.size)
+	vprintf("offset: %v\n", offset)
 
 	var pbw io.Writer
 	pbw = os.Stdout
@@ -219,12 +251,11 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 		pbw = ioutil.Discard
 	}
 	pb := progressbar.NewOptions64(int64(size),
-		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetDescription(filepath.Base(args[0])),
 		progressbar.OptionSetWriter(pbw))
 
 	return safeSigIntContext(func(ctx context.Context) error {
-		return dev.CmdDownload(ctx, io.MultiWriter(f, pb), size, bank, flagOffset, bs)
+		return dev.CmdDownload(ctx, io.MultiWriter(f, pb), size, bank, offset, bs)
 	})
 }
 func main() {
@@ -247,8 +278,8 @@ func main() {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 	}
-	cmdUpload.Flags().Uint32VarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
-	cmdUpload.Flags().Int64VarP(&flagSize, "size", "s", 0, "size of data to upload (default: file size)")
+	cmdUpload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory at which the file will be uploaded")
+	cmdUpload.Flags().VarP(&flagSize, "size", "s", "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
@@ -262,8 +293,8 @@ func main() {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 	}
-	cmdDownload.Flags().Uint32VarP(&flagOffset, "offset", "o", 0, "offset in memory at which the file will be uploaded")
-	cmdDownload.Flags().Int64VarP(&flagSize, "size", "s", 0, "size of data to download")
+	cmdDownload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory at which the file will be uploaded")
+	cmdDownload.Flags().VarP(&flagSize, "size", "s", "size of data to download")
 	cmdDownload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdDownload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdDownload.Flags().IntVarP(&flagByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
