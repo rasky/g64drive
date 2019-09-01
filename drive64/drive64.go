@@ -2,6 +2,7 @@ package drive64
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -191,14 +192,14 @@ func idealChunkSize(size int64) int {
 	}
 }
 
-func (d *Device) CmdUpload(r io.Reader, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
+func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
 	var cmdargs [2]uint32
 	cmdargs[0] = offset
 
 	chunkSize := idealChunkSize(n)
 	d.usb.SetWriteChunkSize(chunkSize + 12)
 
-	for n != 0 {
+	for n != 0 && ctx.Err() == nil {
 		sz := chunkSize
 		if n > 0 && int64(sz) > n {
 			sz = int(n)
@@ -223,16 +224,16 @@ func (d *Device) CmdUpload(r io.Reader, n int64, bank Bank, offset uint32, bs By
 		n -= int64(read)
 	}
 
-	return nil
+	return ctx.Err()
 }
 
-func (d *Device) CmdDownload(w io.Writer, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
+func (d *Device) CmdDownload(ctx context.Context, w io.Writer, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
 	var cmdargs [2]uint32
 	cmdargs[0] = offset
 
 	chunkSize := idealChunkSize(n)
 	d.usb.SetReadChunkSize(chunkSize)
-	for n > 0 {
+	for n > 0 && ctx.Err() == nil {
 		sz := chunkSize
 		if int64(sz) > n {
 			sz = int(n)
@@ -258,5 +259,5 @@ func (d *Device) CmdDownload(w io.Writer, n int64, bank Bank, offset uint32, bs 
 		n -= int64(read)
 	}
 
-	return nil
+	return ctx.Err()
 }

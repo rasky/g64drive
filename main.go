@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 
 	"github.com/rasky/g64drive/drive64"
@@ -51,6 +53,32 @@ func flagBankParse() (drive64.Bank, error) {
 	default:
 		return drive64.BankCARTROM, fmt.Errorf("invalid bank: %v", flagBank)
 	}
+}
+
+func safeSigIntContext(f func(ctx context.Context) error) error {
+	ctx := context.Background()
+
+	// trap Ctrl+C and call cancel on the context
+	ctx, cancel := context.WithCancel(ctx)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	defer func() {
+		signal.Stop(c)
+		cancel()
+	}()
+	go func() {
+		select {
+		case <-c:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	err := f(ctx)
+	if err == context.Canceled {
+		err = errors.New("SIGINT caught, exiting")
+	}
+	return err
 }
 
 func cmdList(cmd *cobra.Command, args []string) error {
@@ -145,7 +173,9 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		pw.CloseWithError(ioerr)
 	}()
 
-	return dev.CmdUpload(pr, size, bank, flagOffset, bs)
+	return safeSigIntContext(func(ctx context.Context) error {
+		return dev.CmdUpload(ctx, pr, size, bank, flagOffset, bs)
+	})
 }
 
 func cmdDownload(cmd *cobra.Command, args []string) error {
@@ -193,7 +223,9 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 		progressbar.OptionSetDescription(filepath.Base(args[0])),
 		progressbar.OptionSetWriter(pbw))
 
-	return dev.CmdDownload(io.MultiWriter(f, pb), size, bank, flagOffset, bs)
+	return safeSigIntContext(func(ctx context.Context) error {
+		return dev.CmdDownload(ctx, io.MultiWriter(f, pb), size, bank, flagOffset, bs)
+	})
 }
 func main() {
 	var cmdList = &cobra.Command{
