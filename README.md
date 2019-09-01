@@ -30,13 +30,14 @@ Make sure you can reach your 64drive:
 
 Upload a ROM to the CARTROM bank (with byteswap and CIC type autodetection):
 ```
-    $ g64drive upload myrom.v64 -v
+    $ g64drive upload myrom.v64 -v --autocic
     64drive serial: RA3B53SW
     upload bank: BankCARTROM
     byteswap: 2
     size: 33554432
     offset: 0
     myrom.z64 100% |████████████████████████████████████████|  [1s:0s]
+    Autoset CIC type: CIC6102
 ```
 
 Download data from the CARTROM bank:
@@ -55,7 +56,7 @@ Download data from the CARTROM bank:
  * Support 64drive HW1 and HW2
  * Upload and download data from any available bank
  * Transparent byteswapping (with autodetection from ROM header)
- * Transparent CIC detection when uploading a ROM
+ * Transparent CIC detection when uploading a ROM, or later at any time
  * Can specify sizes and offsets in decimal, hex, or even kilobytes/megabytes
  * CTRL+C clean shutdown during upload/download -- doesn't need to power-cycle 64drive after it
  * Shipped as static binary, very easy to install on any Linux and macOS system
