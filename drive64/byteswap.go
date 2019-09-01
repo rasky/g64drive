@@ -44,9 +44,9 @@ func (bs ByteSwapper) ByteSwap(buf []byte) error {
 		if len(buf)%4 != 0 {
 			return ErrInvalidBufferForByteswap
 		}
-		for i := 0; i < len(buf); i += 2 {
-			var x = binary.LittleEndian.Uint16(buf[i : i+2])
-			binary.BigEndian.PutUint16(buf[i:i+2], x)
+		for i := 0; i < len(buf); i += 4 {
+			var x = binary.LittleEndian.Uint32(buf[i : i+4])
+			binary.BigEndian.PutUint32(buf[i:i+4], x)
 		}
 		return nil
 	default:
