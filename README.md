@@ -71,11 +71,11 @@ See firmware pack information:
     Content Version    | 2.05
     Prerequisites      |
     Content Note       | Adds support for USB communication from N64, rewritable UFLC
-                    | boards.
+                       | boards.
     Content Changes    | 1. Block-based USB communication pipe is now implemented,
-                    | see Hardware Spec
-                    | 2. Added standalone commands to allow read/write of UFLC
-                    | boards intended for UltraHDMI upgrade distribution
+                       | see Hardware Spec
+                       | 2. Added standalone commands to allow read/write of UFLC
+                       | boards intended for UltraHDMI upgrade distribution
     Content Errata     |
     Content Extra      |
 ```
