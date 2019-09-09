@@ -1,6 +1,6 @@
 # Base build image
 
-FROM golang:1.12-alpine AS build_base
+FROM golang:1.13-alpine AS build_base
 # Install some dependencies needed to build the project
 RUN apk add git ca-certificates gcc libc-dev libftdi1-dev
 WORKDIR /src
