@@ -171,14 +171,14 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 // CmdVersionRequest gets the 64drive hardware and firmware version, and a magic ID that identifies
 // the device (it is used during firmware upgrades to make sure that the firmware being uploaded is designed
 // for this device).
-func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic uint32, err error) {
+func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic [4]byte, err error) {
 	var res [8]byte
 	if err = d.SendCmd(CmdVersionRequest, nil, nil, res[:]); err != nil {
 		return
 	}
 	hwver = Variant(binary.BigEndian.Uint16(res[0:2]))
 	fwver = Version(binary.BigEndian.Uint16(res[2:4]))
-	magic = binary.BigEndian.Uint32(res[4:8])
+	copy(magic[:], res[4:8])
 	return
 }
 
@@ -277,4 +277,21 @@ func (d *Device) CmdDownload(ctx context.Context, w io.Writer, n int64, bank Ban
 	}
 
 	return ctx.Err()
+}
+
+// CmdUpgradeStart triggers a firmware upgrade. The firmware must have been already loaded
+// in BankCARTROM at offset 0. The upgrade happens in background; use CmdUpgradeReport to
+// get a report on the status of the upgrade.
+// NOTE: removing power during an upgrade might brick the 64drive unit.
+func (d *Device) CmdUpgradeStart() error {
+	return d.SendCmd(CmdUpgradeStart, nil, nil, nil)
+}
+
+func (d *Device) CmdUpgradeReport() (UpgradeStatus, error) {
+	var buf [4]byte
+	if err := d.SendCmd(CmdUpgradeReport, nil, nil, buf[:]); err != nil {
+		return 0, err
+	}
+	val := binary.BigEndian.Uint32(buf[:])
+	return UpgradeStatus(val & 0xF), nil
 }

@@ -6,7 +6,7 @@ import (
 	"hash/crc32"
 )
 
-//go:generate stringer -type=Cmd,Bank,CIC -output=const_string.go
+//go:generate stringer -type=Cmd,Bank,CIC,UpgradeStatus -output=const_string.go
 
 // Cmd is the type of a 64drive command send through USB
 type Cmd byte
@@ -18,8 +18,12 @@ const (
 	CmdDumpToPc Cmd = 0x30
 	// CmdSetCicType sets the CIC emulation
 	CmdSetCicType Cmd = 0x72
-	// CmdVersionRequest request the hardware and firmware version
+	// CmdVersionRequest requests the hardware and firmware version
 	CmdVersionRequest Cmd = 0x80
+	// CmdUpgradeStart starts a firmware upgrade
+	CmdUpgradeStart Cmd = 0x84
+	// CmdUpgradeReport returns information on the ongoing firmware upgrade
+	CmdUpgradeReport Cmd = 0x85
 )
 
 // Variant represent the hardware variant (revision)
@@ -32,13 +36,6 @@ const (
 	VarRevB Variant = 0x4200
 )
 
-// Version is the FPGA configuration revision number (firmware version)
-type Version uint16
-
-func (v Version) String() string {
-	return fmt.Sprintf("%d.%02d", v/100, v%100)
-}
-
 func (v Variant) String() string {
 	switch v {
 	case VarRevA:
@@ -48,6 +45,13 @@ func (v Variant) String() string {
 	default:
 		return fmt.Sprintf("UNKVAR (%02x)", uint16(v))
 	}
+}
+
+// Version is the FPGA configuration revision number (firmware version)
+type Version uint16
+
+func (v Version) String() string {
+	return fmt.Sprintf("%d.%02d", v/100, v%100)
 }
 
 // Bank represents a Nintendo 64 memory bank
@@ -122,5 +126,39 @@ func NewCICFromHeader(header []uint8) (CIC, error) {
 		return CICX106, nil
 	default:
 		return 0, fmt.Errorf("cannot detect CIC from ROM header (%08x)", crc)
+	}
+}
+
+// UpgradeStatus represents the current status of the firmware upgrade
+type UpgradeStatus uint8
+
+// These are the possible upgrade status that can occur during a firwmare upgrade.
+// To read the current upgrade status, use Device.CmdUpgradeReport.
+const (
+	UpgradeReset     UpgradeStatus = 0x0
+	UpgradeReady     UpgradeStatus = 0x1
+	UpgradeVerifying UpgradeStatus = 0x2
+	UpgradeErasing00 UpgradeStatus = 0x3
+	UpgradeErasing25 UpgradeStatus = 0x4
+	UpgradeErasing50 UpgradeStatus = 0x5
+	UpgradeErasing75 UpgradeStatus = 0x6
+	UpgradeWriting00 UpgradeStatus = 0x7
+	UpgradeWriting25 UpgradeStatus = 0x8
+	UpgradeWriting50 UpgradeStatus = 0x9
+	UpgradeWriting75 UpgradeStatus = 0xA
+
+	UpgradeSuccess     UpgradeStatus = 0xC
+	UpgradeGeneralFail UpgradeStatus = 0xD
+	UpgradeBadVariant  UpgradeStatus = 0xE
+	UpgradeVerifyFail  UpgradeStatus = 0xF
+)
+
+// IsFinished returns true if the UpgradeStatus represents the end of the upgrade process.
+func (stat UpgradeStatus) IsFinished() bool {
+	switch stat {
+	case UpgradeSuccess, UpgradeGeneralFail, UpgradeBadVariant, UpgradeVerifyFail:
+		return true
+	default:
+		return false
 	}
 }

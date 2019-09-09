@@ -3,14 +3,18 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/c2h5oh/datasize"
 	"github.com/rasky/g64drive/drive64"
@@ -140,6 +144,159 @@ func cmdList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func download(dev *drive64.Device, w io.Writer, size int64, bank drive64.Bank, offset uint32, bs drive64.ByteSwapper, pbdesc string) error {
+	var pbw io.Writer
+	pbw = os.Stdout
+	if flagQuiet {
+		pbw = ioutil.Discard
+	}
+	pb := progressbar.NewOptions64(int64(size),
+		progressbar.OptionSetDescription(pbdesc),
+		progressbar.OptionSetWriter(pbw))
+
+	return safeSigIntContext(func(ctx context.Context) error {
+		return dev.CmdDownload(ctx, io.MultiWriter(w, pb), size, bank, offset, bs)
+	})
+}
+
+func upload(dev *drive64.Device, r io.Reader, size int64, bank drive64.Bank, offset uint32, bs drive64.ByteSwapper, pbdesc string) error {
+	var pbw io.Writer
+	pbw = os.Stdout
+	if flagQuiet {
+		pbw = ioutil.Discard
+	}
+	pb := progressbar.NewOptions64(size,
+		progressbar.OptionSetDescription(pbdesc),
+		progressbar.OptionSetWriter(pbw))
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, ioerr := io.Copy(io.MultiWriter(pw, pb), r)
+		pw.CloseWithError(ioerr)
+	}()
+
+	return safeSigIntContext(func(ctx context.Context) error {
+		return dev.CmdUpload(ctx, pr, size, bank, offset, bs)
+	})
+}
+
+func upgradeFirmware(dev *drive64.Device, rpk *drive64.RPK) error {
+	if err := safeSigIntContext(func(ctx context.Context) error {
+		// Upload firmware asset to CARTROM
+		vprintf("Uploading firmware\n")
+		if err := dev.CmdUpload(ctx, bytes.NewReader(rpk.Asset), int64(len(rpk.Asset)), drive64.BankCARTROM, 0, drive64.BSNone); err != nil {
+			return err
+		}
+
+		// Download firmware asset, compare CRC32, and verify that it's not corrupted
+		vprintf("Verifying firmware\n")
+		crc := crc32.NewIEEE()
+		if err := dev.CmdDownload(ctx, crc, int64(len(rpk.Asset)), drive64.BankCARTROM, 0, drive64.BSNone); err != nil {
+			return err
+		}
+		if crc.Sum32() != crc32.ChecksumIEEE(rpk.Asset) {
+			return errors.New("firmware transfer failed - 64drive SDRAM failure?")
+		}
+
+		if stat, err := dev.CmdUpgradeReport(); err != nil {
+			return err
+		} else if stat != drive64.UpgradeReady {
+			return fmt.Errorf("upgrade module is not ready (%v) -- try power-cycling your 64drive unit", stat)
+		}
+
+		return nil
+
+	}); err != nil {
+		return err
+	}
+
+	_, swver, _, err := dev.CmdVersionRequest()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Ready to upgrade 64drive (serial %v)\n", dev.Description().Serial)
+	fmt.Printf("Current firmware: %v\n", swver)
+	fmt.Printf("New firmware %v (%v) - %v\n", rpk.Metadata.ContentVersionText, rpk.Metadata.Date, rpk.Metadata.ContentNote)
+	fmt.Printf("Do you want to proceed (Y/N):")
+	var resp string
+	if _, err := fmt.Scanln(&resp); err != nil || strings.ToLower(resp) != "y" {
+		return nil
+	}
+
+	if err := dev.CmdUpgradeStart(); err != nil {
+		return err
+	}
+
+	pb := progressbar.NewOptions64(10, progressbar.OptionSetDescription("Upgrading"))
+	pbidx := 0
+	curstat := drive64.UpgradeReady
+	for !curstat.IsFinished() {
+		stat, err := dev.CmdUpgradeReport()
+		if err == nil && stat != curstat {
+			newidx := pbidx
+			var pbdesc string
+			switch stat {
+			case drive64.UpgradeVerifying:
+				newidx = 1
+				pbdesc = "Verifying"
+			case drive64.UpgradeErasing00:
+				newidx = 2
+				pbdesc = "Erasing"
+			case drive64.UpgradeErasing25:
+				newidx = 3
+				pbdesc = "Erasing"
+			case drive64.UpgradeErasing50:
+				newidx = 4
+				pbdesc = "Erasing"
+			case drive64.UpgradeErasing75:
+				newidx = 5
+				pbdesc = "Erasing"
+			case drive64.UpgradeWriting00:
+				newidx = 6
+				pbdesc = "Flashing"
+			case drive64.UpgradeWriting25:
+				newidx = 7
+				pbdesc = "Flashing"
+			case drive64.UpgradeWriting50:
+				newidx = 8
+				pbdesc = "Flashing"
+			case drive64.UpgradeWriting75:
+				newidx = 9
+				pbdesc = "Flashing"
+			case drive64.UpgradeSuccess:
+				newidx = 10
+				pbdesc = "Finished"
+			}
+			if newidx != pbidx {
+				pb.Describe(pbdesc)
+				pb.Add(newidx - pbidx)
+				pbidx = newidx
+			}
+
+			curstat = stat
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	pb.Finish()
+
+	switch curstat {
+	case drive64.UpgradeGeneralFail:
+		return errors.New("Upgrade failed: general failure")
+	case drive64.UpgradeBadVariant:
+		return errors.New("Upgrade failed: wrong hardware variant")
+	case drive64.UpgradeVerifyFail:
+		return errors.New("Upgrade failed: firmware verification failure")
+	case drive64.UpgradeSuccess:
+		printf("\nFirmware upgraded correctly -- power-cycle your 64drive unit\n")
+		return nil
+	default:
+		return fmt.Errorf("unexpected upgrade status: %v", curstat)
+	}
+}
+
 func cmdUpload(cmd *cobra.Command, args []string) error {
 	f, err := os.Open(args[0])
 	if err != nil {
@@ -191,25 +348,13 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	offset := uint32(flagOffset.size)
 	vprintf("offset: %v\n", offset)
 
-	var pbw io.Writer
-	pbw = os.Stdout
-	if flagQuiet {
-		pbw = ioutil.Discard
-	}
-	pb := progressbar.NewOptions64(size,
-		progressbar.OptionSetDescription(filepath.Base(args[0])),
-		progressbar.OptionSetWriter(pbw))
-
-	pr, pw := io.Pipe()
-	go func() {
-		_, ioerr := io.Copy(io.MultiWriter(pw, pb), f)
-		pw.CloseWithError(ioerr)
-	}()
-
-	if err := safeSigIntContext(func(ctx context.Context) error {
-		return dev.CmdUpload(ctx, pr, size, bank, offset, bs)
-	}); err != nil {
+	if err := upload(dev, f, size, bank, offset, bs, filepath.Base(args[0])); err != nil {
 		return err
+	}
+
+	// --autocic defaults to true when uploading a ROM to CARTROM at offset 0
+	if !flagAutoCic && bank == drive64.BankCARTROM && offset == 0 {
+		flagAutoCic = true
 	}
 
 	if flagAutoCic {
@@ -264,18 +409,7 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 	var offset = uint32(flagOffset.size)
 	vprintf("offset: %v\n", offset)
 
-	var pbw io.Writer
-	pbw = os.Stdout
-	if flagQuiet {
-		pbw = ioutil.Discard
-	}
-	pb := progressbar.NewOptions64(int64(size),
-		progressbar.OptionSetDescription(filepath.Base(args[0])),
-		progressbar.OptionSetWriter(pbw))
-
-	return safeSigIntContext(func(ctx context.Context) error {
-		return dev.CmdDownload(ctx, io.MultiWriter(f, pb), size, bank, offset, bs)
-	})
+	return download(dev, f, size, bank, offset, bs, filepath.Base(args[0]))
 }
 
 func cicAutodetect(dev *drive64.Device) (drive64.CIC, error) {
@@ -355,7 +489,41 @@ func cmdFirmwareExtract(cmd *cobra.Command, args []string) error {
 
 func cmdFirmwareUpgrade(cmd *cobra.Command, args []string) error {
 	return fwCmd(args[0], func(rpk *drive64.RPK) error {
-		return errors.New("not yet implemented")
+		switch rpk.Metadata.Type {
+		case 2: // Firmware
+		case 1:
+			return errors.New("bootloader upgrade not yet implemented")
+		default:
+			return errors.New("unknown firmware type")
+		}
+
+		dev, err := drive64.NewDeviceSingle()
+		if err != nil {
+			return err
+		}
+		defer dev.Close()
+		vprintf("64drive serial: %v\n", dev.Description().Serial)
+
+		if hwvar, _, magic, err := dev.CmdVersionRequest(); err != nil {
+			return err
+		} else {
+			if !bytes.Equal(magic[:], []byte(rpk.Metadata.Magic)[:4]) {
+				return errors.New("firmware archive not meant for this device (different product)")
+			}
+			v := []byte(rpk.Metadata.Variant + "\000")[:2]
+			if hwvar != drive64.Variant(binary.BigEndian.Uint16(v)) {
+				return errors.New("firmware archive not meant for this device (different hardware variant)")
+			}
+		}
+
+		switch rpk.Metadata.Type {
+		case drive64.RPKAssetFirmware:
+			return upgradeFirmware(dev, rpk)
+		case drive64.RPKAssetBootloader:
+			return errors.New("bootloader upgrade not implemented")
+		default:
+			return fmt.Errorf("unknown asset type: %s (%08x)", rpk.Metadata.TypeText, rpk.Metadata.Type)
+		}
 	})
 }
 
@@ -382,7 +550,7 @@ func main() {
 	cmdUpload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory at which the file will be uploaded")
 	cmdUpload.Flags().VarP(&flagSize, "size", "s", "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
-	cmdUpload.Flags().BoolVarP(&flagAutoCic, "autocic", "c", false, "sets CIC automatically after upload (same as \"g64drive cic auto\"")
+	cmdUpload.Flags().BoolVarP(&flagAutoCic, "autocic", "c", false, "autoset CIC after upload (default: true if uploading a ROM)")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
@@ -458,6 +626,7 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 		Short: "manage firmware/bootloader upgrades",
 	}
 	cmdFirmware.AddCommand(cmdFirmwareUpgrade, cmdFirmwareInfo, cmdFirmwareExtract)
+	cmdFirmware.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 
 	var rootCmd = &cobra.Command{
 		Use: "g64drive",

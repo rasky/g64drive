@@ -90,13 +90,23 @@ func newBlobFromReader(r io.Reader) (*blob, error) {
 	return &blob{h, body, children}, nil
 }
 
+// RPKAssetType identifies the type of asset that can be stored within a RPK archive
+type RPKAssetType uint32
+
+const (
+	// RPKAssetBootloader is a 64drive bootloader
+	RPKAssetBootloader RPKAssetType = 1
+	// RPKAssetFirmware is a 64drive firmware
+	RPKAssetFirmware RPKAssetType = 2
+)
+
 type RPK struct {
 	Metadata struct {
 		Format      uint32
 		Copyright   string `struct:"[64]byte"`
 		Date        string `struct:"[32]byte"`
 		File        string `struct:"[64]byte"`
-		Type        uint32
+		Type        RPKAssetType
 		TypeText    string `struct:"[32]byte"`
 		Product     string `struct:"[16]byte"`
 		ProductText string `struct:"[64]byte"`
@@ -186,8 +196,8 @@ func (rpk *RPK) DumpMetadata() {
 	dumpField("Type", rpk.Metadata.TypeText)
 	dumpField("Product", rpk.Metadata.ProductText)
 	dumpField("Device", rpk.Metadata.Device)
-	dumpField("Magic", rpk.Metadata.Magic)
-	dumpField("Variant", rpk.Metadata.Variant)
+	dumpField("Device Magic", rpk.Metadata.Magic)
+	dumpField("Device Variant", rpk.Metadata.Variant)
 	dumpField("Content Version", rpk.Metadata.ContentVersionText)
 	dumpField("Prerequisites", rpk.Metadata.PrerequisitesText)
 	dumpField("Content Note", rpk.Metadata.ContentNote)
