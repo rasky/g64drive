@@ -89,6 +89,7 @@ Upgrade firmware:
     New firmware 2.05 (2018-01-04) - Adds support for USB communication from N64, rewritable UFLC boards.
     Do you want to proceed (Y/N):y
     Finished 100% |████████████████████████████████████████|  [23s:0s]
+    Firmware upgraded correctly -- power-cycle your 64drive unit
 ```
 
 ### Features
