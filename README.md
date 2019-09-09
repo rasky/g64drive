@@ -33,7 +33,7 @@ Make sure you can reach your 64drive:
 
 Upload a ROM to the CARTROM bank (with byteswap and CIC type autodetection):
 ```
-    $ g64drive upload myrom.v64 -v --autocic
+    $ g64drive upload myrom.v64 -v
     64drive serial: RA3B53SW
     upload bank: BankCARTROM
     byteswap: 2
@@ -52,6 +52,43 @@ Download data from the CARTROM bank:
     size: 33554432
     offset: 0
     myrom.z64 100% |████████████████████████████████████████|  [1s:0s]
+```
+
+See firmware pack information:
+
+```
+    $ g64drive firmware info 64drive_firm_hw2_205.rpk
+    Key                | Value
+    ---------------------------------------------------------------------------------
+    Copyright          | (c) 2018 Retroactive LLC
+    Date               | 2018-01-04
+    File               | firmware.bin
+    Type               | Firmware
+    Product            | 64drive
+    Device             | EP4CE10F17
+    Device Magic       | UDEV
+    Device Variant     | B
+    Content Version    | 2.05
+    Prerequisites      |
+    Content Note       | Adds support for USB communication from N64, rewritable UFLC
+                    | boards.
+    Content Changes    | 1. Block-based USB communication pipe is now implemented,
+                    | see Hardware Spec
+                    | 2. Added standalone commands to allow read/write of UFLC
+                    | boards intended for UltraHDMI upgrade distribution
+    Content Errata     |
+    Content Extra      |
+```
+
+Upgrade firmware:
+
+```
+    $ g64drive firmware upgrade 64drive_firm_hw2_205.rpk
+    Ready to upgrade 64drive (serial RA3B53SW)
+    Current firmware: 2.04
+    New firmware 2.05 (2018-01-04) - Adds support for USB communication from N64, rewritable UFLC boards.
+    Do you want to proceed (Y/N):y
+    Finished 100% |████████████████████████████████████████|  [23s:0s]
 ```
 
 ### Features
