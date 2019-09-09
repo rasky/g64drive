@@ -63,9 +63,9 @@ Download data from the CARTROM bank:
  * Can specify sizes and offsets in decimal, hex, or even kilobytes/megabytes
  * CTRL+C clean shutdown during upload/download -- doesn't need to power-cycle 64drive after it
  * Shipped as static binary, very easy to install on any Linux and macOS system
+ * Firmware upgrades (flashing `.rpk` file as distributed by Retroactive)
 
 What's missing:
- * Firmware upgrades
  * Standalone mode
 
 ### Bugs?
