@@ -5,8 +5,8 @@
 g64drive ships as a static binary on both Linux and macOS, with no additional dependencies
 required. Just download it and put it in your `PATH` (eg: `/usr/local/bin`):
 
- * Download [Linux 64-bit binary](https://github.com/rasky/g64drive/releases/download/v0.1/g64drive-linux64.binary)
- * Download [macOS 64-bit binary](https://github.com/rasky/g64drive/releases/download/v0.1/g64drive-mac.binary)
+ * Download [Linux 64-bit binary](https://github.com/rasky/g64drive/releases/download/v0.2/g64drive-linux64.binary)
+ * Download [macOS 64-bit binary](https://github.com/rasky/g64drive/releases/download/v0.2/g64drive-mac.binary)
 
 ### Installation (source)
 
