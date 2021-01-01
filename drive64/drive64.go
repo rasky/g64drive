@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/ziutek/ftdi"
 )
@@ -17,6 +18,7 @@ var (
 	ErrMultipleDevices = errors.New("multiple 64drive devices found")
 	ErrFrozen          = errors.New("64drive seems frozen, please reset it")
 	ErrUnsupported     = errors.New("operation is not supported on this 64drive revision")
+	ErrInvalidFifoHead = errors.New("invalid FIFO header")
 )
 
 // VendorIDs used by 64drive (actually, FTDI)
@@ -293,6 +295,7 @@ func (d *Device) CmdUpgradeStart() error {
 	return d.SendCmd(CmdUpgradeStart, nil, nil, nil)
 }
 
+// CmdUpgradeReport reports the status of an ongoing firmware update
 func (d *Device) CmdUpgradeReport() (UpgradeStatus, error) {
 	var buf [4]byte
 	if err := d.SendCmd(CmdUpgradeReport, nil, nil, buf[:]); err != nil {
@@ -300,4 +303,51 @@ func (d *Device) CmdUpgradeReport() (UpgradeStatus, error) {
 	}
 	val := binary.BigEndian.Uint32(buf[:])
 	return UpgradeStatus(val & 0xF), nil
+}
+
+func (d *Device) CmdFifoRead(ctx context.Context) (typ uint8, data []byte, err error) {
+	var head [4]byte
+	var n int
+
+	for ctx.Err() == nil {
+		if _, err = d.usb.Read(head[:]); err == nil {
+			break
+		} else if err == ErrFrozen {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		} else {
+			return
+		}
+	}
+	if ctx.Err() != nil {
+		err = ctx.Err()
+		return
+	}
+
+	if string(head[:]) != "DMA@" {
+		err = ErrInvalidFifoHead
+		return
+	}
+
+	var size [4]byte
+	if n, err = d.usb.Read(size[:]); err != nil || n != 4 {
+		err = fmt.Errorf("USB FIFO Read: invalid packet size")
+		return
+	}
+
+	typ = size[0]
+	len := (int(size[1]) << 16) | (int(size[2]) << 8) | int(size[3])
+	data = make([]byte, len)
+	if n, err = d.usb.Read(data); err != nil || n != len {
+		err = fmt.Errorf("USB FIFO Read: invalid short packet")
+		return
+	}
+
+	if _, err = d.usb.Read(head[:]); err != nil || string(head[:]) != "CMPH" {
+		err = fmt.Errorf("USB FIFO Read: invalid short packet")
+		return
+	}
+
+	err = ctx.Err()
+	return
 }
