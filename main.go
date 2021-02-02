@@ -156,6 +156,7 @@ func download(dev *drive64.Device, w io.Writer, size int64, bank drive64.Bank, o
 		progressbar.OptionSetWriter(pbw))
 
 	return safeSigIntContext(func(ctx context.Context) error {
+		defer fmt.Println()
 		return dev.CmdDownload(ctx, io.MultiWriter(w, pb), size, bank, offset, bs)
 	})
 }
@@ -177,6 +178,7 @@ func upload(dev *drive64.Device, r io.Reader, size int64, bank drive64.Bank, off
 	}()
 
 	return safeSigIntContext(func(ctx context.Context) error {
+		defer fmt.Println()
 		return dev.CmdUpload(ctx, pr, size, bank, offset, bs)
 	})
 }
