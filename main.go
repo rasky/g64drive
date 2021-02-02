@@ -680,5 +680,7 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
 	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdFirmware, cmdFifo)
-	rootCmd.Execute()
+	if rootCmd.Execute() != nil {
+		os.Exit(1)
+	}
 }
