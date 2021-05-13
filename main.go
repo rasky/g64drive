@@ -32,7 +32,6 @@ var (
 	flagByteswapD    int
 	flagByteswapU    int
 	flagFwExtractOut string
-	flagFifoErrors   bool
 )
 
 type sizeUnit struct {
@@ -530,7 +529,7 @@ func cmdFirmwareUpgrade(cmd *cobra.Command, args []string) error {
 	})
 }
 
-func cmdFifoRead(cmd *cobra.Command, args []string) error {
+func cmdDebug(cmd *cobra.Command, args []string) error {
 	dev, err := drive64.NewDeviceSingle()
 	if err != nil {
 		return err
@@ -539,10 +538,7 @@ func cmdFifoRead(cmd *cobra.Command, args []string) error {
 
 	return safeSigIntContext(func(ctx context.Context) error {
 		for ctx.Err() == nil {
-			if _, data, err := dev.CmdFifoRead(ctx); err != nil {
-				if flagFifoErrors {
-					return err
-				}
+			if typ, data, err := dev.CmdFifoRead(ctx); err != nil {
 				// To allow running FIFO reads while a stream of data is already
 				// in progress, errors are not blocking and do not print
 				// header errors which is what we expect when we jump into the
@@ -551,7 +547,15 @@ func cmdFifoRead(cmd *cobra.Command, args []string) error {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
 				}
 			} else {
-				fmt.Printf("%s", data)
+				switch typ {
+				case 1:
+					// Since packets are padded to be aligned, text packets
+					// might contain trailing zeros.
+					data = bytes.TrimRight(data, "\000")
+					fmt.Printf("%s", data)
+				default:
+					// ignoring unknown packet type
+				}
 			}
 		}
 		return ctx.Err()
@@ -659,27 +663,20 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 	cmdFirmware.AddCommand(cmdFirmwareUpgrade, cmdFirmwareInfo, cmdFirmwareExtract)
 	cmdFirmware.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 
-	var cmdFifoRead = &cobra.Command{
-		Use:   "read",
-		Short: "read packets from USB FIFO, sent by N64",
-		Example: `  g64drive fifo read >dump.dat
-	-- read packets from the FIFO to disk.`,
-		RunE:         cmdFifoRead,
+	var cmdDebug = &cobra.Command{
+		Use:   "debug",
+		Short: "debug a running program using libdragon/UNFLoader protocol",
+		Example: `  g64drive debug
+	-- see the output of the program`,
+		RunE:         cmdDebug,
 		SilenceUsage: true,
 	}
-	cmdFifoRead.Flags().BoolVarP(&flagFifoErrors, "force-sync", "f", false, "if true, expect perfect sync and abort in case of errors")
-
-	var cmdFifo = &cobra.Command{
-		Use:   "fifo",
-		Short: "manage USB FIFO read/write",
-	}
-	cmdFifo.AddCommand(cmdFifoRead)
 
 	var rootCmd = &cobra.Command{
 		Use: "g64drive",
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdFirmware, cmdFifo)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdFirmware, cmdDebug)
 	if rootCmd.Execute() != nil {
 		os.Exit(1)
 	}
