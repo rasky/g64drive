@@ -235,9 +235,11 @@ func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank,
 			return err
 		}
 
-		// Transfer must be multiple of 8. Pad with zeros
-		for len(buf)%8 != 0 {
-			buf = append(buf, 0)
+		// Transfer must be multiple of 512 bytes. Pad with FF to mimic
+		// non-initialized ROM. NOTE: this seems like a firmware bug on 64drive,
+		// docs say that 32-bit alignment should be enough.
+		for len(buf)%512 != 0 {
+			buf = append(buf, 0xFF)
 			read += 1
 		}
 
