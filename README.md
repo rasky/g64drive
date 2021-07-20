@@ -95,11 +95,13 @@ Upgrade firmware:
 ### Features
 
  * Support 64drive HW1 and HW2
+ * No "sudo" required
  * Upload and download data from any available bank
  * Transparent byteswapping (with autodetection from ROM header)
  * Transparent CIC detection when uploading a ROM, or later at any time
  * Can specify sizes and offsets in decimal, hex, or even kilobytes/megabytes
  * Firmware upgrades (flashing `.rpk` file as distributed by Retroactive)
+ * Debugging protocol compatible with libdragon and UNFLoader
  * CTRL+C clean shutdown during upload/download -- don't need to power-cycle 64drive after it
  * Shipped as static binary, very easy to install on any Linux and macOS system
 
