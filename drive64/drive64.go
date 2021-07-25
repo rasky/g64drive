@@ -211,7 +211,7 @@ func idealChunkSize(size int64) int {
 	}
 }
 
-func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
+func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank, offset uint32) error {
 	var cmdargs [2]uint32
 	cmdargs[0] = offset
 
@@ -229,9 +229,6 @@ func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank,
 			if err == io.EOF {
 				return nil
 			}
-			return err
-		}
-		if err = bs.ByteSwap(buf); err != nil {
 			return err
 		}
 
@@ -254,7 +251,7 @@ func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank,
 	return ctx.Err()
 }
 
-func (d *Device) CmdDownload(ctx context.Context, w io.Writer, n int64, bank Bank, offset uint32, bs ByteSwapper) error {
+func (d *Device) CmdDownload(ctx context.Context, w io.Writer, n int64, bank Bank, offset uint32) error {
 	var cmdargs [2]uint32
 	cmdargs[0] = offset
 
@@ -268,10 +265,6 @@ func (d *Device) CmdDownload(ctx context.Context, w io.Writer, n int64, bank Ban
 		buf := make([]byte, sz)
 		cmdargs[1] = uint32(bank)<<24 | uint32(sz)
 		if err := d.SendCmd(CmdDumpToPc, cmdargs[:], nil, buf); err != nil {
-			return err
-		}
-
-		if err := bs.ByteSwap(buf); err != nil {
 			return err
 		}
 

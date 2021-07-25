@@ -144,7 +144,7 @@ func cmdList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func download(dev *drive64.Device, w io.Writer, size int64, bank drive64.Bank, offset uint32, bs drive64.ByteSwapper, pbdesc string) error {
+func download(dev *drive64.Device, w io.Writer, size int64, bank drive64.Bank, offset uint32, pbdesc string) error {
 	var pbw io.Writer
 	pbw = os.Stdout
 	if flagQuiet {
@@ -156,11 +156,11 @@ func download(dev *drive64.Device, w io.Writer, size int64, bank drive64.Bank, o
 
 	return safeSigIntContext(func(ctx context.Context) error {
 		defer fmt.Println()
-		return dev.CmdDownload(ctx, io.MultiWriter(w, pb), size, bank, offset, bs)
+		return dev.CmdDownload(ctx, io.MultiWriter(w, pb), size, bank, offset)
 	})
 }
 
-func upload(dev *drive64.Device, r io.Reader, size int64, bank drive64.Bank, offset uint32, bs drive64.ByteSwapper, pbdesc string) error {
+func upload(dev *drive64.Device, r io.Reader, size int64, bank drive64.Bank, offset uint32, pbdesc string) error {
 	var pbw io.Writer
 	pbw = os.Stdout
 	if flagQuiet {
@@ -178,7 +178,7 @@ func upload(dev *drive64.Device, r io.Reader, size int64, bank drive64.Bank, off
 
 	return safeSigIntContext(func(ctx context.Context) error {
 		defer fmt.Println()
-		return dev.CmdUpload(ctx, pr, size, bank, offset, bs)
+		return dev.CmdUpload(ctx, pr, size, bank, offset)
 	})
 }
 
@@ -186,14 +186,14 @@ func upgradeFirmware(dev *drive64.Device, rpk *drive64.RPK) error {
 	if err := safeSigIntContext(func(ctx context.Context) error {
 		// Upload firmware asset to CARTROM
 		vprintf("Uploading firmware\n")
-		if err := dev.CmdUpload(ctx, bytes.NewReader(rpk.Asset), int64(len(rpk.Asset)), drive64.BankCARTROM, 0, drive64.BSNone); err != nil {
+		if err := dev.CmdUpload(ctx, bytes.NewReader(rpk.Asset), int64(len(rpk.Asset)), drive64.BankCARTROM, 0); err != nil {
 			return err
 		}
 
 		// Download firmware asset, compare CRC32, and verify that it's not corrupted
 		vprintf("Verifying firmware\n")
 		crc := crc32.NewIEEE()
-		if err := dev.CmdDownload(ctx, crc, int64(len(rpk.Asset)), drive64.BankCARTROM, 0, drive64.BSNone); err != nil {
+		if err := dev.CmdDownload(ctx, crc, int64(len(rpk.Asset)), drive64.BankCARTROM, 0); err != nil {
 			return err
 		}
 		if crc.Sum32() != crc32.ChecksumIEEE(rpk.Asset) {
@@ -350,7 +350,8 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	offset := uint32(flagOffset.size)
 	vprintf("offset: %v\n", offset)
 
-	if err := upload(dev, f, size, bank, offset, bs, filepath.Base(args[0])); err != nil {
+	rommd5 := md5.New()
+	if err := upload(dev, io.TeeReader(bs.NewReader(f), rommd5), size, bank, offset, filepath.Base(args[0])); err != nil {
 		return err
 	}
 
@@ -411,13 +412,13 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 	var offset = uint32(flagOffset.size)
 	vprintf("offset: %v\n", offset)
 
-	return download(dev, f, size, bank, offset, bs, filepath.Base(args[0]))
+	return download(dev, bs.NewWriter(f), size, bank, offset, filepath.Base(args[0]))
 }
 
 func cicAutodetect(dev *drive64.Device) (drive64.CIC, error) {
 	var header bytes.Buffer
 	if err := dev.CmdDownload(context.Background(), &header, 0x1000,
-		drive64.BankCARTROM, 0, drive64.BSNone); err != nil {
+		drive64.BankCARTROM, 0); err != nil {
 		return 0, err
 	}
 	return drive64.NewCICFromHeader(header.Bytes())

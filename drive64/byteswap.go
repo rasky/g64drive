@@ -3,6 +3,7 @@ package drive64
 import (
 	"encoding/binary"
 	"errors"
+	"io"
 )
 
 // ByteSwapper is a helper for byteswapping memory buffers
@@ -10,7 +11,7 @@ type ByteSwapper uint8
 
 const (
 	// BSNone is the no-op byteswapper
-	BSNone ByteSwapper = 0
+	BSNone ByteSwapper = 1
 	// BSTwo byteswaps groups of 2 consecutive bytes in a buffer
 	BSTwo ByteSwapper = 2
 	// BSFour byteswaps groups of 4 consecutive bytes in a buffer
@@ -52,6 +53,42 @@ func (bs ByteSwapper) ByteSwap(buf []byte) error {
 	default:
 		panic("unreachable")
 	}
+}
+
+type bsReader struct {
+	r  io.Reader
+	bs ByteSwapper
+}
+
+type bsWriter struct {
+	w  io.Writer
+	bs ByteSwapper
+}
+
+func (r *bsReader) Read(buf []byte) (int, error) {
+	n := len(buf)
+	n -= n % int(r.bs)
+	read, err := io.ReadFull(r.r, buf[:n])
+	if err != nil {
+		return read, err
+	}
+	r.bs.ByteSwap(buf[:n])
+	return n, nil
+}
+
+func (w *bsWriter) Write(buf []byte) (int, error) {
+	if err := w.bs.ByteSwap(buf); err != nil {
+		return 0, err
+	}
+	return w.w.Write(buf)
+}
+
+func (bs ByteSwapper) NewReader(r io.Reader) io.Reader {
+	return &bsReader{r: r, bs: bs}
+}
+
+func (bs ByteSwapper) NewWriter(w io.Writer) io.Writer {
+	return &bsWriter{w: w, bs: bs}
 }
 
 // ByteSwapDetect detects the correct byteswapping format from a Nintendo 64 ROM header,
