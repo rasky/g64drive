@@ -12,13 +12,13 @@ required. Just download it and put it in your `PATH` (eg: `/usr/local/bin`):
 
 Make sure you have:
 
- * Go 1.12 or newer
+ * Go 1.16 or newer
  * libftdi1-dev
 
 installed on your system. Then, to download and build g64drive from source code, simply run:
 
 ```
-    $ GO111MODULE=on go build github.com/rasky/g64drive
+    $ go build github.com/rasky/g64drive
 ```
 
 ### Usage quicksheet
@@ -99,6 +99,7 @@ Upgrade firmware:
  * Upload and download data from any available bank
  * Transparent byteswapping (with autodetection from ROM header)
  * Transparent CIC detection when uploading a ROM, or later at any time
+ * Transparent Save Type detection using [mupen64 ROM database](https://github.com/mupen64plus/mupen64plus-core/blob/88b43017103840d530cce5de6fd8afba50e88606/data/mupen64plus.ini) and the [special ED64 ROM header](https://github.com/krikzz/ED64/blob/master/docs/rom_config_database.md) for homebrew
  * Can specify sizes and offsets in decimal, hex, or even kilobytes/megabytes
  * Firmware upgrades (flashing `.rpk` file as distributed by Retroactive)
  * Debugging protocol compatible with libdragon and UNFLoader
