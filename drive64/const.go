@@ -18,6 +18,8 @@ const (
 	CmdDumpToPc Cmd = 0x30
 	// CmdSetCicType sets the CIC emulation
 	CmdSetCicType Cmd = 0x72
+	// CmdSetSaveType sets the save emulation
+	CmdSetSaveType Cmd = 0x70
 	// CmdVersionRequest requests the hardware and firmware version
 	CmdVersionRequest Cmd = 0x80
 	// CmdUpgradeStart starts a firmware upgrade
@@ -82,6 +84,18 @@ const (
 	CICX105 CIC = 5
 	CICX106 CIC = 6
 	CIC5101 CIC = 7
+)
+
+// Save emulation types supported by 64drive
+type SaveType uint8
+
+const (
+	SaveNone        SaveType = 0
+	SaveEeprom4Kb   SaveType = 1
+	SaveEeprom16Kb  SaveType = 2
+	SaveSRAM256Kb   SaveType = 3
+	SaveFlashRAM1Mb SaveType = 4
+	SaveSRAM768Kb   SaveType = 5
 )
 
 // NewCICFromString parses a string representing the CIC name (eg. "6103") and

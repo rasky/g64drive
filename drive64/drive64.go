@@ -200,6 +200,12 @@ func (d *Device) CmdSetCicType(cic CIC) error {
 	return d.SendCmd(CmdSetCicType, args[:], nil, nil)
 }
 
+func (d *Device) CmdSetSaveType(st SaveType) error {
+	var args [1]uint32
+	args[0] = uint32(st)
+	return d.SendCmd(CmdSetSaveType, args[:], nil, nil)
+}
+
 func idealChunkSize(size int64) int {
 	switch {
 	case size >= 16*1024*1024:

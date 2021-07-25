@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -27,6 +29,7 @@ var (
 	flagOffset       sizeUnit
 	flagSize         sizeUnit
 	flagAutoCic      bool
+	flagAutoSave     bool
 	flagBank         string
 	flagQuiet        bool
 	flagByteswapD    int
@@ -359,6 +362,9 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	if !flagAutoCic && bank == drive64.BankCARTROM && offset == 0 {
 		flagAutoCic = true
 	}
+	if !flagAutoSave && bank == drive64.BankCARTROM && offset == 0 {
+		flagAutoSave = true
+	}
 
 	if flagAutoCic {
 		cic, err := cicAutodetect(dev)
@@ -368,6 +374,25 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		vprintf("\nAutoset CIC type: %v", cic)
 
 		if err := dev.CmdSetCicType(cic); err != nil {
+			return err
+		}
+	}
+
+	if flagAutoSave {
+		rommd5 := hex.EncodeToString(rommd5.Sum(nil))
+		game := romdb_search(rommd5)
+		st := drive64.SaveNone
+		switch game.SaveType {
+		case "Eeprom 4KB":
+			st = drive64.SaveEeprom4Kb
+		case "Eeprom 16KB":
+			st = drive64.SaveEeprom16Kb
+		case "Flash RAM":
+			st = drive64.SaveFlashRAM1Mb
+		case "SRAM":
+			st = drive64.SaveSRAM256Kb
+		}
+		if err := dev.CmdSetSaveType(st); err != nil {
 			return err
 		}
 	}
@@ -587,6 +612,7 @@ func main() {
 	cmdUpload.Flags().VarP(&flagSize, "size", "s", "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagAutoCic, "autocic", "c", false, "autoset CIC after upload (default: true if uploading a ROM)")
+	cmdUpload.Flags().BoolVarP(&flagAutoSave, "autosave", "S", false, "autoset save tyep after upload (default: true if uploading a ROM)")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
