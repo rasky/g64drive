@@ -21,6 +21,15 @@ var (
 	ErrInvalidFifoHead = errors.New("invalid FIFO header")
 )
 
+// Set to true to activate low-level logging for debugging purposes
+var DebugLogging = false
+
+func vprintf(s string, args ...interface{}) {
+	if DebugLogging {
+		fmt.Printf(s, args...)
+	}
+}
+
 // VendorIDs used by 64drive (actually, FTDI)
 const vid = 0x0403
 
@@ -165,6 +174,7 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 	if len(in) != 0 {
 		buf.Write(in)
 	}
+	vprintf("usb: sending %x\n", buf.Bytes())
 	if n, err := d.usb.Write(buf.Bytes()); err != nil {
 		return err
 	} else if n != buf.Len() {
@@ -176,10 +186,12 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 		if _, err := io.ReadFull(&d.usb, out); err != nil {
 			return err
 		}
+		vprintf("usb: reading %x\n", out)
 	}
 	if _, err := io.ReadFull(&d.usb, abuf[:]); err != nil {
 		return err
 	}
+	vprintf("usb: reading %x\n", out)
 	if abuf[0] != 0x43 || abuf[1] != 0x4D || abuf[2] != 0x50 || abuf[3] != byte(cmd) {
 		return fmt.Errorf("SendCmd: invalid completion packet (%x)", abuf)
 	}

@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	flagVerbose      bool
+	flagVerbose      int
 	flagOffset       sizeUnit
 	flagSize         sizeUnit
 	flagAutoCic      bool
@@ -68,7 +68,7 @@ func printf(s string, args ...interface{}) {
 	}
 }
 func vprintf(s string, args ...interface{}) {
-	if flagVerbose {
+	if flagVerbose > 0 {
 		printf(s, args...)
 	}
 }
@@ -121,6 +121,9 @@ func safeSigIntContext(f func(ctx context.Context) error) error {
 }
 
 func cmdList(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	devices := drive64.Enumerate()
 
 	if len(devices) == 0 {
@@ -130,7 +133,7 @@ func cmdList(cmd *cobra.Command, args []string) error {
 	printf("Found %d 64drive device(s):\n", len(devices))
 	for i, d := range devices {
 		printf(" * %d: %v %v (serial: %v)\n", i, d.Manufacturer, d.Description, d.Serial)
-		if flagVerbose {
+		if flagVerbose > 0 {
 			if dev, err := d.Open(); err == nil {
 				if hwver, fwver, _, err := dev.CmdVersionRequest(); err == nil {
 					printf("   -> Hardware: %v, Firmware: %v\n", hwver, fwver)
@@ -303,6 +306,9 @@ func upgradeFirmware(dev *drive64.Device, rpk *drive64.RPK) error {
 }
 
 func cmdUpload(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	f, err := os.Open(args[0])
 	if err != nil {
 		return err
@@ -455,6 +461,9 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 }
 
 func cmdDownload(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	dev, err := drive64.NewDeviceSingle()
 	if err != nil {
 		return err
@@ -504,6 +513,9 @@ func cicAutodetect(dev *drive64.Device) (drive64.CIC, error) {
 }
 
 func cmdCic(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	var cic drive64.CIC
 	if args[0] != "auto" {
 		var err error
@@ -567,6 +579,9 @@ func fwCmd(filename string, cb func(rpk *drive64.RPK) error) error {
 }
 
 func cmdFirmwareInfo(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	return fwCmd(args[0], func(rpk *drive64.RPK) error {
 		if !flagQuiet {
 			rpk.DumpMetadata()
@@ -576,6 +591,9 @@ func cmdFirmwareInfo(cmd *cobra.Command, args []string) error {
 }
 
 func cmdFirmwareExtract(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	return fwCmd(args[0], func(rpk *drive64.RPK) error {
 		fn := rpk.Metadata.File
 		if flagFwExtractOut != "" {
@@ -590,6 +608,9 @@ func cmdFirmwareExtract(cmd *cobra.Command, args []string) error {
 }
 
 func cmdFirmwareUpgrade(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	return fwCmd(args[0], func(rpk *drive64.RPK) error {
 		switch rpk.Metadata.Type {
 		case 2: // Firmware
@@ -630,6 +651,9 @@ func cmdFirmwareUpgrade(cmd *cobra.Command, args []string) error {
 }
 
 func cmdDebug(cmd *cobra.Command, args []string) error {
+	if flagVerbose >= 2 {
+		drive64.DebugLogging = true
+	}
 	dev, err := drive64.NewDeviceSingle()
 	if err != nil {
 		return err
@@ -671,7 +695,8 @@ func main() {
 		RunE:         cmdList,
 		SilenceUsage: true,
 	}
-	cmdList.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "also show hardware/firmware version of each board")
+	cmdList.Flags().IntVarP(&flagVerbose, "verbose", "v", 0, "also show hardware/firmware version of each board")
+	cmdList.Flag("verbose").NoOptDefVal = "1"
 
 	var cmdUpload = &cobra.Command{
 		Use:          "upload [file]",
@@ -687,8 +712,9 @@ func main() {
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagAutoCic, "autocic", "c", false, "autoset CIC after upload (default: true if uploading a ROM)")
 	cmdUpload.Flags().BoolVarP(&flagAutoSave, "autosave", "S", false, "autoset save tyep after upload (default: true if uploading a ROM)")
-	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdUpload.Flags().IntVarP(&flagVerbose, "verbose", "v", 0, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
+	cmdUpload.Flag("verbose").NoOptDefVal = "1"
 
 	var cmdDownload = &cobra.Command{
 		Use:          "download [file]",
@@ -702,9 +728,10 @@ func main() {
 	cmdDownload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory at which the file will be uploaded")
 	cmdDownload.Flags().VarP(&flagSize, "size", "s", "size of data to download")
 	cmdDownload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
-	cmdDownload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdDownload.Flags().IntVarP(&flagVerbose, "verbose", "v", 0, "be verbose")
 	cmdDownload.Flags().IntVarP(&flagByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
 	cmdDownload.MarkFlagRequired("size")
+	cmdDownload.Flag("verbose").NoOptDefVal = "1"
 
 	var cmdCic = &cobra.Command{
 		Use:     "cic [type]",
@@ -722,7 +749,8 @@ will be transferred from 64drive and analyzed, and the correct CIC variant will 
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 	}
-	cmdCic.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdCic.Flags().IntVarP(&flagVerbose, "verbose", "v", 0, "be verbose")
+	cmdCic.Flag("verbose").NoOptDefVal = "1"
 
 	var cmdSaveType = &cobra.Command{
 		Use:     "savetype [type]",
@@ -777,7 +805,8 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 		Short: "manage firmware/bootloader upgrades",
 	}
 	cmdFirmware.AddCommand(cmdFirmwareUpgrade, cmdFirmwareInfo, cmdFirmwareExtract)
-	cmdFirmware.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdFirmware.PersistentFlags().IntVarP(&flagVerbose, "verbose", "v", 0, "be verbose")
+	cmdFirmware.Flag("verbose").NoOptDefVal = "1"
 
 	var cmdDebug = &cobra.Command{
 		Use:   "debug",
