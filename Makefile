@@ -6,7 +6,7 @@ all:
 	@echo "•  make linux      - build release binary on Linux through Docker"
 
 release:
-	go build -ldflags '-s -w' -mod=vendor -o g64drive-mac.binary
+	go build -ldflags '-s -w' -o g64drive-mac.binary
 	upx --quiet --quiet --lzma g64drive-mac.binary
 
 linux:
