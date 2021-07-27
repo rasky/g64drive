@@ -371,7 +371,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		vprintf("\nAutoset CIC type: %v", cic)
+		vprintf("Autoset CIC type: %v\n", cic)
 
 		if err := dev.CmdSetCicType(cic); err != nil {
 			return err
@@ -381,6 +381,9 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	if flagAutoSave {
 		rommd5 := hex.EncodeToString(rommd5.Sum(nil))
 		game := romdb_search(rommd5)
+		if game.Name != "" {
+			vprintf("Detected game: %v\n", game.Name)
+		}
 		st := drive64.SaveNone
 		switch game.SaveType {
 		case "Eeprom 4KB":
@@ -392,6 +395,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		case "SRAM":
 			st = drive64.SaveSRAM256Kb
 		}
+		vprintf("Autoset save type: %v\n", st)
 		if err := dev.CmdSetSaveType(st); err != nil {
 			return err
 		}

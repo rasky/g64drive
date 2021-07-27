@@ -6,7 +6,7 @@ import (
 	"hash/crc32"
 )
 
-//go:generate stringer -type=Cmd,Bank,CIC,UpgradeStatus -output=const_string.go
+//go:generate stringer -type=Cmd,Bank,CIC,SaveType,UpgradeStatus -output=const_string.go
 
 // Cmd is the type of a 64drive command send through USB
 type Cmd byte
