@@ -36,14 +36,29 @@ type DeviceDesc struct {
 	ProductID    int    // USB product ID
 }
 
+// Try to guess the 64drive variant by looking at USB-level fingerprints.
+// This is required when the variant is needed before being able to communicate and
+// issue a CmdVersionRequest command.
+func (d *DeviceDesc) guessVariant() Variant {
+	switch {
+	case d.ProductID == 0x6010:
+		return VarRevA
+	default:
+		return VarRevB
+	}
+}
+
 // Open this 64drive device
 func (d *DeviceDesc) Open() (*Device, error) {
 	usb, err := ftdi.Open(vid, d.ProductID, d.Description, d.Serial, 0, ftdi.ChannelAny)
-	if err == nil {
-		err = usb.SetBitmode(0xFF, ftdi.ModeReset)
-	}
-	if err == nil {
-		err = usb.SetBitmode(0xFF, ftdi.ModeSyncFF)
+	if d.guessVariant() != VarRevA {
+		// HW2 version requires synchronous mode
+		if err == nil {
+			err = usb.SetBitmode(0xFF, ftdi.ModeReset)
+		}
+		if err == nil {
+			err = usb.SetBitmode(0xFF, ftdi.ModeSyncFF)
+		}
 	}
 	if err == nil {
 		err = usb.PurgeBuffers()

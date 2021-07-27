@@ -374,7 +374,11 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 		vprintf("Autoset CIC type: %v\n", cic)
 
 		if err := dev.CmdSetCicType(cic); err != nil {
-			return err
+			if err == drive64.ErrUnsupported {
+				vprintf("Setting CIC not supported on 64drive HW1, skipping")
+			} else {
+				return err
+			}
 		}
 	}
 
