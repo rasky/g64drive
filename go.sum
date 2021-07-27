@@ -56,6 +56,9 @@ github.com/zhuyie/golzf v0.0.0-20161112031142-8387b0307ade h1:bafvQukPrIYwYWcft4
 github.com/zhuyie/golzf v0.0.0-20161112031142-8387b0307ade/go.mod h1:juNhYdla04C276MyU4zR0BA7t90ziLKPwkjDgddGYV0=
 github.com/ziutek/ftdi v0.0.0-20181130113013-aef9e445a2fa h1:8J6YeSHVtoJG5sodX1Y6qPM3eaLmxC0noolyHwWdbsM=
 github.com/ziutek/ftdi v0.0.0-20181130113013-aef9e445a2fa/go.mod h1:N08Z75zCaXPhywWVtQxjPLGCh0HtZ0pUIEeV/UlHmhI=
+github.com/ziutek/ftdi v0.0.1 h1:IrFtqLisIzEfgSnuLg1suZYLkn227DTyE464XswAGK4=
+github.com/ziutek/ftdi v0.0.1/go.mod h1:fUzQhjslJJSlwoMW5Cd+0RUc8KuMDfsuZB+wfJAz1eg=
+github.com/ziutek/lcd v0.0.0-20141212131202-924f223d0903/go.mod h1:ZBCPhfHIcCtzsrXIcyEiSPDKHrjT9fXtJNKj2t1HCKw=
 golang.org/x/crypto v0.0.0-20181203042331-505ab145d0a9/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/sys v0.0.0-20181205085412-a5c9d58dba9a h1:1n5lsVfiQW3yfsRGu98756EH1YthsFqr/5mxHduZW2A=
 golang.org/x/sys v0.0.0-20181205085412-a5c9d58dba9a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
