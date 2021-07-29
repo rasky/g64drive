@@ -133,7 +133,7 @@ func cmdList(cmd *cobra.Command, args []string) error {
 		if flagVerbose {
 			if dev, err := d.Open(); err == nil {
 				if hwver, fwver, _, err := dev.CmdVersionRequest(); err == nil {
-					printf("   -> Hardware: %v, Firmware: %v", hwver, fwver)
+					printf("   -> Hardware: %v, Firmware: %v\n", hwver, fwver)
 				} else {
 					return err
 				}
