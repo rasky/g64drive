@@ -395,8 +395,19 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 				st = drive64.SaveEeprom16Kbit
 			case "Flash RAM":
 				st = drive64.SaveFlashRAM1Mbit
+				// Special case: for Pokemon Stadium 2, 64drive HW1
+				// needs a special save type. This happens because HW1 only
+				// has 64Mb of RDRAM, and the ROM is 64Mb. Normally, the 1Mbit
+				// is stolen at the end of the RDRAM/ROM but this specific game
+				// has non-blank data at the end. So the 64drive firmware can use
+				// a different (hardcoded) address where to put the save data,
+				// overriding a portion that is known to be blank. Since this
+				// address is hardcoded in the firmware, we cannot use it for
+				// anything but this specific game.
 				if strings.HasPrefix(game.Name, "Pokemon Stadium 2") {
-					st = drive64.SaveFlashRAM1Mbit_PokStad2
+					if hwvar, _, _, err := dev.CmdVersionRequest(); err != nil && hwvar == drive64.VarRevA {
+						st = drive64.SaveFlashRAM1Mbit_PokStad2
+					}
 				}
 			case "SRAM":
 				st = drive64.SaveSRAM256Kbit
