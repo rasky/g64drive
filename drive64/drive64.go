@@ -113,6 +113,7 @@ func (d *drive64Device) Read(buf []byte) (int, error) {
 type Device struct {
 	usb  drive64Device
 	desc DeviceDesc
+	vers [8]byte
 }
 
 // NewDeviceSingle opens a connected 64drive device, that must be the only one
@@ -188,14 +189,17 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 // CmdVersionRequest gets the 64drive hardware and firmware version, and a magic ID that identifies
 // the device (it is used during firmware upgrades to make sure that the firmware being uploaded is designed
 // for this device).
+// The result of this call is internally cached, so that it doesn't require a USB
+// communication after the first time it is invoked.
 func (d *Device) CmdVersionRequest() (hwver Variant, fwver Version, magic [4]byte, err error) {
-	var res [8]byte
-	if err = d.SendCmd(CmdVersionRequest, nil, nil, res[:]); err != nil {
-		return
+	if binary.LittleEndian.Uint64(d.vers[:]) == 0 {
+		if err = d.SendCmd(CmdVersionRequest, nil, nil, d.vers[:]); err != nil {
+			return
+		}
 	}
-	hwver = Variant(binary.BigEndian.Uint16(res[0:2]))
-	fwver = Version(binary.BigEndian.Uint16(res[2:4]))
-	copy(magic[:], res[4:8])
+	hwver = Variant(binary.BigEndian.Uint16(d.vers[0:2]))
+	fwver = Version(binary.BigEndian.Uint16(d.vers[2:4]))
+	copy(magic[:], d.vers[4:8])
 	return
 }
 
