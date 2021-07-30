@@ -375,7 +375,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 
 		if err := dev.CmdSetCicType(cic); err != nil {
 			if err == drive64.ErrUnsupported {
-				vprintf("Setting CIC not supported on 64drive HW1, skipping")
+				vprintf("Setting CIC not supported on 64drive HW1, skipping\n")
 			} else {
 				return err
 			}
@@ -405,7 +405,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 				// address is hardcoded in the firmware, we cannot use it for
 				// anything but this specific game.
 				if strings.HasPrefix(game.Name, "Pokemon Stadium 2") {
-					if hwvar, _, _, err := dev.CmdVersionRequest(); err != nil && hwvar == drive64.VarRevA {
+					if hwvar, _, _, err := dev.CmdVersionRequest(); err == nil && hwvar == drive64.VarRevA {
 						st = drive64.SaveFlashRAM1Mbit_PokStad2
 					}
 				}
