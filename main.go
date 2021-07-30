@@ -384,20 +384,52 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 
 	if flagAutoSave {
 		rommd5 := hex.EncodeToString(rommd5.Sum(nil))
+		st := drive64.SaveNone
 		game := romdb_search(rommd5)
 		if game.Name != "" {
 			vprintf("Detected game: %v\n", game.Name)
-		}
-		st := drive64.SaveNone
-		switch game.SaveType {
-		case "Eeprom 4KB":
-			st = drive64.SaveEeprom4Kb
-		case "Eeprom 16KB":
-			st = drive64.SaveEeprom16Kb
-		case "Flash RAM":
-			st = drive64.SaveFlashRAM1Mb
-		case "SRAM":
-			st = drive64.SaveSRAM256Kb
+			switch game.SaveType {
+			case "Eeprom 4KB":
+				st = drive64.SaveEeprom4Kbit
+			case "Eeprom 16KB":
+				st = drive64.SaveEeprom16Kbit
+			case "Flash RAM":
+				st = drive64.SaveFlashRAM1Mbit
+			case "SRAM":
+				st = drive64.SaveSRAM256Kbit
+			}
+		} else {
+			// Download the header and see if it matches
+			var header bytes.Buffer
+			if err := dev.CmdDownload(context.Background(), &header, 512,
+				drive64.BankCARTROM, 0); err != nil {
+				vprintf("Error reading back ROM header: %v\n", err)
+			} else {
+				var buf = header.Bytes()
+				if buf[0x3C] == 'E' && buf[0x3D] == 'D' {
+					vprintf("ED64 ROM header detected\n")
+					var cfg uint8 = buf[0x3F]
+					switch cfg >> 4 {
+					case 0:
+						st = drive64.SaveNone
+					case 1:
+						st = drive64.SaveEeprom4Kbit
+					case 2:
+						st = drive64.SaveEeprom16Kbit
+					case 3:
+						st = drive64.SaveSRAM256Kbit
+					case 4:
+						st = drive64.SaveSRAM768Kbit
+					case 5:
+						st = drive64.SaveFlashRAM1Mbit
+					case 6:
+						fmt.Printf("WARNING: the ROM requested a 1Mbit SRAM savetype, which is not supported by 64drive\n")
+						st = drive64.SaveNone
+					default:
+						vprintf("WARNING: invalid ED64 ROM confing header value: %02x\n", cfg)
+					}
+				}
+			}
 		}
 		vprintf("Autoset save type: %v\n", st)
 		if err := dev.CmdSetSaveType(st); err != nil {
@@ -483,6 +515,26 @@ func cmdCic(cmd *cobra.Command, args []string) error {
 	vprintf("CIC type: %v\n", cic)
 
 	return dev.CmdSetCicType(cic)
+}
+
+func cmdSaveType(cmd *cobra.Command, args []string) error {
+	var savetype drive64.SaveType
+	var err error
+	if savetype, err = drive64.NewSaveTypeFromString(args[0]); err != nil {
+		return err
+	}
+
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+	vprintf("Save type: %v\n", savetype)
+
+	return dev.CmdSetSaveType(savetype)
+
 }
 
 func fwCmd(filename string, cb func(rpk *drive64.RPK) error) error {
@@ -658,6 +710,20 @@ will be transferred from 64drive and analyzed, and the correct CIC variant will 
 	}
 	cmdCic.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 
+	var cmdSaveType = &cobra.Command{
+		Use:     "savetype [type]",
+		Aliases: []string{"st"},
+		Short:   "change the emulated save type",
+		Long: `Change the variant of save memory that the 64drive emulates.
+The save type can be specified using one of the following names: "none", "eeprom4kbit", "eeprom16kbit", "sram256kbit", "flash1mbit", "sram768kbit", "flash1mbit_pokstad2".`,
+		Example: `  g64drive savetype eeprom16kbit     
+    -- sets save type emulation to EEPROM with 16Kbit of space.`,
+		RunE:         cmdSaveType,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdSaveType.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+
 	var cmdFirmwareInfo = &cobra.Command{
 		Use:   "info [file.rpk]",
 		Short: "show information on 64drive firmware file",
@@ -711,7 +777,7 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 		Use: "g64drive",
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdFirmware, cmdDebug)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdSaveType, cmdFirmware, cmdDebug)
 	if rootCmd.Execute() != nil {
 		os.Exit(1)
 	}

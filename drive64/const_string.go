@@ -101,16 +101,17 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[SaveNone-0]
-	_ = x[SaveEeprom4Kb-1]
-	_ = x[SaveEeprom16Kb-2]
-	_ = x[SaveSRAM256Kb-3]
-	_ = x[SaveFlashRAM1Mb-4]
-	_ = x[SaveSRAM768Kb-5]
+	_ = x[SaveEeprom4Kbit-1]
+	_ = x[SaveEeprom16Kbit-2]
+	_ = x[SaveSRAM256Kbit-3]
+	_ = x[SaveFlashRAM1Mbit-4]
+	_ = x[SaveSRAM768Kbit-5]
+	_ = x[SaveFlashRAM1Mbit_PokStad2-6]
 }
 
-const _SaveType_name = "SaveNoneSaveEeprom4KbSaveEeprom16KbSaveSRAM256KbSaveFlashRAM1MbSaveSRAM768Kb"
+const _SaveType_name = "SaveNoneSaveEeprom4KbitSaveEeprom16KbitSaveSRAM256KbitSaveFlashRAM1MbitSaveSRAM768KbitSaveFlashRAM1Mbit_PokStad2"
 
-var _SaveType_index = [...]uint8{0, 8, 21, 35, 48, 63, 76}
+var _SaveType_index = [...]uint8{0, 8, 23, 39, 54, 71, 86, 112}
 
 func (i SaveType) String() string {
 	if i >= SaveType(len(_SaveType_index)-1) {

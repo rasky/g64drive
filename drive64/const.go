@@ -90,12 +90,13 @@ const (
 type SaveType uint8
 
 const (
-	SaveNone        SaveType = 0
-	SaveEeprom4Kb   SaveType = 1
-	SaveEeprom16Kb  SaveType = 2
-	SaveSRAM256Kb   SaveType = 3
-	SaveFlashRAM1Mb SaveType = 4
-	SaveSRAM768Kb   SaveType = 5
+	SaveNone                   SaveType = 0
+	SaveEeprom4Kbit            SaveType = 1
+	SaveEeprom16Kbit           SaveType = 2
+	SaveSRAM256Kbit            SaveType = 3
+	SaveFlashRAM1Mbit          SaveType = 4
+	SaveSRAM768Kbit            SaveType = 5
+	SaveFlashRAM1Mbit_PokStad2 SaveType = 6
 )
 
 // NewCICFromString parses a string representing the CIC name (eg. "6103") and
@@ -140,6 +141,27 @@ func NewCICFromHeader(header []uint8) (CIC, error) {
 		return CICX106, nil
 	default:
 		return 0, fmt.Errorf("cannot detect CIC from ROM header (%08x)", crc)
+	}
+}
+
+func NewSaveTypeFromString(name string) (SaveType, error) {
+	switch name {
+	case "none":
+		return SaveNone, nil
+	case "eeprom4kbit":
+		return SaveEeprom4Kbit, nil
+	case "eeprom16kbit":
+		return SaveEeprom16Kbit, nil
+	case "sram256kbit":
+		return SaveSRAM256Kbit, nil
+	case "flash1mbit":
+		return SaveFlashRAM1Mbit, nil
+	case "sram768kbit":
+		return SaveSRAM768Kbit, nil
+	case "flash1mbit_pokstad2":
+		return SaveFlashRAM1Mbit_PokStad2, nil
+	default:
+		return 0, errors.New("invalid save type")
 	}
 }
 
