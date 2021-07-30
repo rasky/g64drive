@@ -395,6 +395,9 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 				st = drive64.SaveEeprom16Kbit
 			case "Flash RAM":
 				st = drive64.SaveFlashRAM1Mbit
+				if strings.HasPrefix(game.Name, "Pokemon Stadium 2") {
+					st = drive64.SaveFlashRAM1Mbit_PokStad2
+				}
 			case "SRAM":
 				st = drive64.SaveSRAM256Kbit
 			}
@@ -715,7 +718,8 @@ will be transferred from 64drive and analyzed, and the correct CIC variant will 
 		Aliases: []string{"st"},
 		Short:   "change the emulated save type",
 		Long: `Change the variant of save memory that the 64drive emulates.
-The save type can be specified using one of the following names: "none", "eeprom4kbit", "eeprom16kbit", "sram256kbit", "flash1mbit", "sram768kbit", "flash1mbit_pokstad2".`,
+The save type can be specified using one of the following names:
+"none", "eeprom4kbit", "eeprom16kbit", "sram256kbit", "flash1mbit", "sram768kbit", "flash1mbit_pokstad2".`,
 		Example: `  g64drive savetype eeprom16kbit     
     -- sets save type emulation to EEPROM with 16Kbit of space.`,
 		RunE:         cmdSaveType,
