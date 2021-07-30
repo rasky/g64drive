@@ -765,7 +765,7 @@ The save type can be specified using one of the following names:
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 	}
-	cmdSaveType.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdSaveType.Flags().IntVarP(&flagVerbose, "verbose", "v", 0, "be verbose")
 
 	var cmdFirmwareInfo = &cobra.Command{
 		Use:   "info [file.rpk]",
