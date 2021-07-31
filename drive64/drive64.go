@@ -103,6 +103,9 @@ func (d *drive64Device) Read(buf []byte) (int, error) {
 	for retry := 0; retry < 5; retry++ {
 		n, err := d.Device.Read(buf)
 		if n == 0 && err == nil {
+			// Sleep before trying again. A little sleep is required at least
+			// on HW1 where the hardware seems slower in processing requests.
+			time.Sleep(5 * time.Millisecond)
 			continue
 		}
 		return n, err
