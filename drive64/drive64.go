@@ -246,7 +246,7 @@ func (d *Device) CmdUpload(ctx context.Context, r io.Reader, n int64, bank Bank,
 	chunkSize := idealChunkSize(n)
 	d.usb.SetWriteChunkSize(chunkSize + 12)
 
-	for n >= 0 && ctx.Err() == nil {
+	for n > 0 && ctx.Err() == nil {
 		sz := chunkSize
 		if n > 0 && int64(sz) > n {
 			sz = int(n)
