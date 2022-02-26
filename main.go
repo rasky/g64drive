@@ -636,6 +636,13 @@ func cmdDebug(cmd *cobra.Command, args []string) error {
 	}
 	defer dev.Close()
 
+	// Check firmware version and verify if it's new enough
+	if _, fwver, _, err := dev.CmdVersionRequest(); err == nil {
+		if fwver < 205 {
+			return fmt.Errorf("\"g64drive debug\" requires 64drive firmware >= 2.05, found: %v\nDownload a newer firmware from http://64drive.retroactive.be, and then run \"g64drive firmware upgrade\" to upgrade", fwver)
+		}
+	}
+
 	return safeSigIntContext(func(ctx context.Context) error {
 		for ctx.Err() == nil {
 			if typ, data, err := dev.CmdFifoRead(ctx); err != nil {
