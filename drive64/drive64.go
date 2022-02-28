@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,7 +20,14 @@ var (
 	ErrFrozen          = errors.New("64drive seems frozen, please reset it")
 	ErrUnsupported     = errors.New("operation is not supported on this 64drive revision")
 	ErrInvalidFifoHead = errors.New("invalid FIFO header")
+	ErrUnknownDevice   = errors.New("found compatible USB device which cannot be accessed")
 )
+
+func init() {
+	if runtime.GOOS == "windows" {
+		ErrUnknownDevice = errors.New(ErrUnknownDevice.Error() + "\nInstall a libusb-compatible driver using Zadig (https://zadig.akeo.ie)")
+	}
+}
 
 // VendorIDs used by 64drive (actually, FTDI)
 const vid = 0x0403
@@ -66,9 +74,13 @@ func (d *DeviceDesc) Open() (*Device, error) {
 	return &Device{usb: drive64Device{usb}, desc: *d}, err
 }
 
-// Enumerate returns a list of all 64drive devices found attached to this system
-func Enumerate() []DeviceDesc {
+// Enumerate returns a list of all 64drive devices found attached to this system.
+// It also returns a boolean flag indicating whether unknown compatible devices
+// were found; on Windows, this might indicate a device which has no libusb-compatible
+// drivers.
+func Enumerate() ([]DeviceDesc, bool) {
 	var devices []DeviceDesc
+	var unknown bool
 
 	for _, pid := range pids {
 		devs, err := ftdi.FindAll(vid, pid)
@@ -76,6 +88,9 @@ func Enumerate() []DeviceDesc {
 			panic(err)
 		}
 		for _, d := range devs {
+			if d.Manufacturer == "" && d.Description == "" && d.Serial == "" {
+				unknown = true
+			}
 			if d.Manufacturer == "Retroactive" && strings.HasPrefix(d.Description, "64drive") {
 				devices = append(devices, DeviceDesc{
 					Manufacturer: d.Manufacturer,
@@ -88,7 +103,7 @@ func Enumerate() []DeviceDesc {
 		}
 	}
 
-	return devices
+	return devices, unknown
 }
 
 type drive64Device struct {
@@ -123,8 +138,11 @@ type Device struct {
 // connected to this PC. If multiple devices are found, it returns ErrMultipleDevices.
 // If no devices are found, it returns ErrNoDevices.
 func NewDeviceSingle() (*Device, error) {
-	devs := Enumerate()
+	devs, unk := Enumerate()
 	if len(devs) == 0 {
+		if unk {
+			return nil, ErrUnknownDevice
+		}
 		return nil, ErrNoDevices
 	}
 	if len(devs) > 1 {
@@ -136,10 +154,14 @@ func NewDeviceSingle() (*Device, error) {
 // NewDeviceBySerial opens a specified 64drive, identified by its serial number.
 // If no device is found, ErrNoDevices is returned.
 func NewDeviceBySerial(serial string) (*Device, error) {
-	for _, d := range Enumerate() {
+	devs, unk := Enumerate()
+	for _, d := range devs {
 		if d.Serial == serial {
 			return d.Open()
 		}
+	}
+	if unk {
+		return nil, ErrUnknownDevice
 	}
 	return nil, ErrNoDevices
 }

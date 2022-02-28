@@ -121,9 +121,12 @@ func safeSigIntContext(f func(ctx context.Context) error) error {
 }
 
 func cmdList(cmd *cobra.Command, args []string) error {
-	devices := drive64.Enumerate()
+	devices, unk := drive64.Enumerate()
 
 	if len(devices) == 0 {
+		if unk {
+			return drive64.ErrUnknownDevice
+		}
 		return errors.New("no 64drive devices found")
 	}
 
