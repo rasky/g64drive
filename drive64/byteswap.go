@@ -11,7 +11,7 @@ type ByteSwapper uint8
 
 const (
 	// BSNone is the no-op byteswapper
-	BSNone ByteSwapper = 1
+	BSNone ByteSwapper = 0
 	// BSTwo byteswaps groups of 2 consecutive bytes in a buffer
 	BSTwo ByteSwapper = 2
 	// BSFour byteswaps groups of 4 consecutive bytes in a buffer
@@ -67,7 +67,9 @@ type bsWriter struct {
 
 func (r *bsReader) Read(buf []byte) (int, error) {
 	n := len(buf)
-	n -= n % int(r.bs)
+	if r.bs != BSNone {
+		n -= n % int(r.bs)
+	}
 	read, err := io.ReadFull(r.r, buf[:n])
 	if err != nil {
 		return read, err
