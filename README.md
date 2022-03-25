@@ -27,7 +27,7 @@ Make sure you have:
 installed on your system. Then, to download and build g64drive from source code, simply run:
 
 ```
-    $ go build github.com/rasky/g64drive
+    $ go install github.com/rasky/g64drive@latest
 ```
 
 ### Usage quicksheet
