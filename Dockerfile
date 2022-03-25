@@ -7,7 +7,7 @@ RUN apk add git ca-certificates gcc make libc-dev libftdi1-dev libftdi1-static
 
 # Compile libusb from source code because Alpine does not ship a package with
 # libusb as static library.
-RUN apk add libudev-zero-dev linux-headers
+RUN apk add eudev-dev linux-headers
 RUN mkdir /tmp/libusb && \
 	cd /tmp/libusb && \
 	wget -q https://github.com/libusb/libusb/releases/download/v1.0.24/libusb-1.0.24.tar.bz2 && \
