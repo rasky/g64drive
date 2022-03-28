@@ -341,8 +341,11 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	vprintf("byteswap: %v\n", bs)
 
 	size := flagSize.size
-	if size < 0 || size%512 != 0 {
-		return errors.New("invalid size value")
+	if size < 0 {
+		return errors.New("invalid size value (negative number")
+	}
+	if size%512 != 0 {
+		return errors.New("invalid size value (must be multiple of 512)")
 	}
 	if size == 0 {
 		fi, err := f.Stat()
