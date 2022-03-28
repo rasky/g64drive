@@ -701,10 +701,11 @@ func main() {
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 
 	var cmdDownload = &cobra.Command{
-		Use:          "download [file]",
-		Aliases:      []string{"d"},
-		Short:        "download data from 64drive",
-		Long:         `Download a binary file from 64drive, on the specified bank`,
+		Use:     "download [file]",
+		Aliases: []string{"d"},
+		Short:   "download data from 64drive",
+		Long: `Download a binary file from 64drive, on the specified bank.
+Supported banks are: rom, sram256, sram768, flash, flash_pokstad2, eeprom.`,
 		RunE:         cmdDownload,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
