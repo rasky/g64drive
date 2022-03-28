@@ -45,7 +45,7 @@ func (s *sizeUnit) String() string {
 	return fmt.Sprintf("%v", s.size)
 }
 func (s *sizeUnit) Set(text string) error {
-	if sz, err := strconv.ParseInt(text, 64, 0); err == nil {
+	if sz, err := strconv.ParseInt(text, 0, 64); err == nil {
 		s.size = sz
 		return nil
 	}
