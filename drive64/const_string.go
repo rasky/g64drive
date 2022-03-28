@@ -57,13 +57,13 @@ func _() {
 	_ = x[BankSRAM256-2]
 	_ = x[BankSRAM768-3]
 	_ = x[BankFLASH-4]
-	_ = x[BankPOKEMON-5]
+	_ = x[BankFLASH_POKSTAD2-5]
 	_ = x[BankEEPROM-6]
 }
 
-const _Bank_name = "BankCARTROMBankSRAM256BankSRAM768BankFLASHBankPOKEMONBankEEPROM"
+const _Bank_name = "BankCARTROMBankSRAM256BankSRAM768BankFLASHBankFLASH_POKSTAD2BankEEPROM"
 
-var _Bank_index = [...]uint8{0, 11, 22, 33, 42, 53, 63}
+var _Bank_index = [...]uint8{0, 11, 22, 33, 42, 60, 70}
 
 func (i Bank) String() string {
 	i -= 1

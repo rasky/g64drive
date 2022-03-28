@@ -83,8 +83,8 @@ func flagBankParse() (drive64.Bank, error) {
 		return drive64.BankSRAM768, nil
 	case "flash":
 		return drive64.BankFLASH, nil
-	case "pokemon":
-		return drive64.BankPOKEMON, nil
+	case "flash_pokstad2":
+		return drive64.BankFLASH_POKSTAD2, nil
 	case "eeprom":
 		return drive64.BankEEPROM, nil
 	default:

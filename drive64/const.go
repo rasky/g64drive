@@ -62,12 +62,12 @@ type Bank uint8
 // Predefined Nintendo64 banks, which can be used as a target for
 // a memory download or upload operation.
 const (
-	BankCARTROM Bank = 1
-	BankSRAM256 Bank = 2
-	BankSRAM768 Bank = 3
-	BankFLASH   Bank = 4
-	BankPOKEMON Bank = 5
-	BankEEPROM  Bank = 6
+	BankCARTROM        Bank = 1
+	BankSRAM256        Bank = 2
+	BankSRAM768        Bank = 3
+	BankFLASH          Bank = 4
+	BankFLASH_POKSTAD2 Bank = 5
+	BankEEPROM         Bank = 6
 )
 
 // CIC is the Nintendo 64 protection chip. This type represents on the
