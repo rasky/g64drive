@@ -489,8 +489,8 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 	defer f.Close()
 
 	size := flagSize.size
-	if size < 0 || size%512 != 0 {
-		return errors.New("invalid size value")
+	if size < 0 {
+		return errors.New("invalid size value (negative number")
 	}
 	vprintf("size: %v\n", size)
 

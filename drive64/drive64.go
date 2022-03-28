@@ -312,16 +312,24 @@ func (d *Device) CmdDownload(ctx context.Context, w io.Writer, n int64, bank Ban
 		if int64(sz) > n {
 			sz = int(n)
 		}
-		buf := make([]byte, sz)
-		cmdargs[1] = uint32(bank)<<24 | uint32(sz)
+
+		// Because of a 64drive firmware bug, transfers must be multiple of 512 bytes.
+		// So force a transfer of that size in any case, and then just ignore extra bytes.
+		paddedSz := sz
+		if paddedSz%512 != 0 {
+			paddedSz += 512 - paddedSz%512
+		}
+
+		buf := make([]byte, paddedSz)
+		cmdargs[1] = uint32(bank)<<24 | uint32(paddedSz)
 		if err := d.SendCmd(CmdDumpToPc, cmdargs[:], nil, buf); err != nil {
 			return err
 		}
 
-		read, err := w.Write(buf)
+		read, err := w.Write(buf[:sz])
 		if err != nil {
 			return err
-		} else if read != len(buf) {
+		} else if read != sz {
 			panic("provided writer does not respect io.Writer interface")
 		}
 
