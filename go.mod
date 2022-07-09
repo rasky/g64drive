@@ -15,4 +15,4 @@ require (
 	gopkg.in/restruct.v1 v1.0.0-20190323193435-3c2afb705f3c
 )
 
-replace github.com/ziutek/ftdi => github.com/pabigot/ftdi v0.0.1
+replace github.com/ziutek/ftdi => github.com/pabigot/ftdi v0.0.2-0.20220708175016-f8ae45117403
