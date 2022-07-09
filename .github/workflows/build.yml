@@ -29,7 +29,7 @@ jobs:
           cd libusb-1.0.24
           ./configure --disable-dependency-tracking --disable-udev
           make
-          make install
+          sudo make install
       - name: Build Linux
         run: go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
         env:
