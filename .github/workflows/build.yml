@@ -67,6 +67,14 @@ jobs:
           go-version: 1.18.x
       - name: Install dependencies
         run: brew install libftdi libusb pkg-config
+      # We want to do a build which doesn't depend on homebrew dynamic libraries
+      # for libusb and libftdi1. To do so, we need to patch the cgo lines in libftdi1
+      # to avoid using pkg-config and instead manually providing include paths and
+      # library paths, including explcitly mentioning the .a files for the two libraries.
+      - name: Patch for static build
+        run: |
+          go mod vendor
+          sed -i.bak "s|#cgo darwin pkg-config.*|#cgo darwin CFLAGS: -I$(brew --prefix)/include/libftdi1 -I$(brew --prefix)/include/libusb-1.0\\n#cgo darwin LDFLAGS: $(brew --prefix)/lib/libftdi1.a $(brew --prefix)/lib/libusb-1.0.a -framework IOKit -framework CoreFoundation -framework Security|" vendor/github.com/ziutek/ftdi/device.go
       - name: Build
         run: go build -ldflags '-s -w'
       - name: Upload Linux binary
