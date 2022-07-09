@@ -66,7 +66,7 @@ jobs:
         with:
           go-version: 1.18.x
       - name: Install dependencies
-        run: brew install libftdi1 libusb pkg-config
+        run: brew install libftdi libusb pkg-config
       - name: Build
         run: go build -ldflags '-s -w'
       - name: Upload Linux binary
