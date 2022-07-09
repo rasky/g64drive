@@ -74,7 +74,10 @@ jobs:
       - name: Patch for static build
         run: |
           go mod vendor
-          sed -i.bak "s|#cgo darwin pkg-config.*|#cgo darwin CFLAGS: -I$(brew --prefix)/include/libftdi1 -I$(brew --prefix)/include/libusb-1.0\\n#cgo darwin LDFLAGS: $(brew --prefix)/lib/libftdi1.a $(brew --prefix)/lib/libusb-1.0.a -framework IOKit -framework CoreFoundation -framework Security|" vendor/github.com/ziutek/ftdi/device.go
+          export SED_SEARCH='#cgo darwin pkg-config.*'
+          export SED_REPLACE1="#cgo darwin CFLAGS: -I$(brew --prefix)/include/libftdi1 -I$(brew --prefix)/include/libusb-1.0"
+          export SED_REPLACE2="#cgo darwin LDFLAGS: $(brew --prefix)/lib/libftdi1.a $(brew --prefix)/lib/libusb-1.0.a -framework IOKit -framework CoreFoundation -framework Security"
+          sed -i.bak "s|$SED_SEARCH|$SED_REPLACE1\\n$SED_REPLACE2|" vendor/github.com/ziutek/ftdi/device.go
       - name: Build
         run: go build -ldflags '-s -w'
       - name: Upload Linux binary
