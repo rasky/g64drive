@@ -8,7 +8,7 @@ on:
 
 jobs:
   Linux-Build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -19,8 +19,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libusb-dev libftdi1-dev
-      - name: Build
+          sudo apt-get install libusb-dev libftdi1-dev libudev-dev
+      - name: Build Linux
         run: go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static -ludev"'
       - name: Upload
         uses: actions/upload-artifact@v3
