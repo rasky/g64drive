@@ -33,7 +33,7 @@ jobs:
       - name: Build Linux
         run: go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
         env:
-          PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
       - name: Upload
         uses: actions/upload-artifact@v3
         with:
