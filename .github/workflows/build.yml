@@ -2,26 +2,24 @@ name: build
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 jobs:
-  xgo:
+  Linux-Build:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
+      - name: Checkout
         uses: actions/checkout@v3
-      -
-        name: Build
-        uses: crazy-max/ghaction-xgo@v2
+      - name: Setup Go
+        uses: actions/setup-go@v3
         with:
-          xgo_version: latest
-          go_version: 1.18
-          dest: build
-          prefix: myapp
-          targets: windows/amd64,linux/amd64,linux/arm64,darwin/arm64
-          v: true
-          x: false
-          race: false
-          ldflags: -s -w
-          buildmode: default  -deps https://github.com/libusb/libusb/releases/download/v1.0.24/libusb-1.0.24.tar.bz2 -deps https://www.intra2net.com/en/developer/libftdi/download/libftdi1-1.5.tar.bz2
+          go-version: 1.18.x
+      - name: Build
+        run: go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static -ludev"'
+      - name: Upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: g64drive-linux-amd64
+          path: g64drive
