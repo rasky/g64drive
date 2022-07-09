@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  Linux-Build:
+  Build-Linux-Windows:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,7 +19,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libftdi1-dev
+          sudo apt-get install libftdi1-dev mingw-w64
+      # Build libusb from source. This is required to disable usage of udev
+      # which in turns simplify static linking because Ubuntu doesn't ship with
+      # a static version of udev (and that would require recompiling systemd).
+      # udev supported is only useful for hotplugging, which we don't need anyway.
       - name: Build libusb
         run: |
           mkdir /tmp/libusb
@@ -34,8 +38,39 @@ jobs:
         run: go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
-      - name: Upload
+      - name: Upload Linux binary
         uses: actions/upload-artifact@v3
         with:
           name: g64drive-linux-amd64
+          path: g64drive
+      - name: Build Windows
+        run: go build -ldflags '-s -w'
+        env: 
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 1
+          CC: "x86_64-w64-mingw32-gcc"
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: g64drive-windows-amd64
+          path: g64drive.exe
+
+  Build-Mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.x
+      - name: Install dependencies
+        run: brew install libftdi1 libusb pkg-config
+      - name: Build
+        run: go build -ldflags '-s -w'
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: g64drive-mac-amd64
           path: g64drive
