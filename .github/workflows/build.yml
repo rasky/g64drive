@@ -37,16 +37,20 @@ jobs:
           make
           sudo make install
       - name: Build Linux
-        run: go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
+        run: |
+          go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
+          tar cvzf g64drive-linux-amd64.tar.gz g64drive
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
       - name: Upload Linux binary
         uses: actions/upload-artifact@v3
         with:
-          name: g64drive-linux-amd64
-          path: g64drive
+          name: g64drive-linux-amd64.tar.gz
+          path: g64drive-linux-amd64.tar.gz
       - name: Build Windows
-        run: go build -ldflags '-s -w'
+        run: |
+          go build -ldflags '-s -w'
+          zip -9 g64drive-windows-amd64.zip g64drive.exe
         env: 
           GOOS: windows
           GOARCH: amd64
@@ -55,16 +59,16 @@ jobs:
       - name: Upload Windows binary
         uses: actions/upload-artifact@v3
         with:
-          name: g64drive-windows-amd64
-          path: g64drive.exe
+          name: g64drive-windows-amd64.zip
+          path: g64drive-windows-amd64.zip
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           draft: true
           files: |
-            g64drive
-            g64drive.exe
+            g64drive-linux-amd64.tar.gz
+            g64drive-windows-amd64.zip
 
   Build-Mac:
     runs-on: macos-latest
@@ -89,16 +93,18 @@ jobs:
           export SED_REPLACE2="#cgo darwin LDFLAGS: $(brew --prefix)/lib/libftdi1.a $(brew --prefix)/lib/libusb-1.0.a -framework IOKit -framework CoreFoundation -framework Security"
           sed -i.bak "s|$SED_SEARCH|$SED_REPLACE1\\n$SED_REPLACE2|" vendor/github.com/ziutek/ftdi/device.go
       - name: Build
-        run: go build -ldflags '-s -w'
+        run: |
+          go build -ldflags '-s -w'
+          zip -9 g64drive-mac-amd64.zip g64drive
       - name: Upload Linux binary
         uses: actions/upload-artifact@v3
         with:
-          name: g64drive-mac-amd64
-          path: g64drive
+          name: g64drive-mac-amd64.zip
+          path: g64drive-mac-amd64.zip
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           draft: true
           files: |
-            g64drive
+            g64drive-mac-amd64.zip
