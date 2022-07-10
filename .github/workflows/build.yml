@@ -55,6 +55,14 @@ jobs:
         with:
           name: g64drive-windows-amd64
           path: g64drive.exe
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: true
+          files: |
+            g64drive
+            g64drive.exe
 
   Build-Mac:
     runs-on: macos-latest
@@ -85,3 +93,10 @@ jobs:
         with:
           name: g64drive-mac-amd64
           path: g64drive
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          draft: true
+          files: |
+            g64drive
