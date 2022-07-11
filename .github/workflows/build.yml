@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libftdi1-dev mingw-w64
+          sudo apt-get install libftdi1-dev mingw-w64 osslsigncode
       # Build libusb from source. This is required to disable usage of udev
       # which in turns simplify static linking because Ubuntu doesn't ship with
       # a static version of udev (and that would require recompiling systemd).
@@ -38,7 +38,7 @@ jobs:
           sudo make install
       - name: Build Linux
         run: |
-          go build --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
+          go build -v --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
           tar cvzf g64drive-linux-amd64.tar.gz g64drive
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
@@ -49,13 +49,18 @@ jobs:
           path: g64drive-linux-amd64.tar.gz
       - name: Build Windows
         run: |
-          go build -ldflags '-s -w'
+          go build -v -ldflags '-s -w' -o g64drive.unsigned.exe
+          echo "$WIN_CERTIFICATE_KEY" | base64 --decode > cert.key
+          echo "$WIN_CERTIFICATE_PUB" | base64 --decode > cert.pub
+          osslsigncode sign -certs cert.pub -key cert.key -t http://timestamp.digicert.com -in g64drive.unsigned.exe -out g64drive.exe
           zip -9 g64drive-windows-amd64.zip g64drive.exe
         env: 
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: 1
           CC: "x86_64-w64-mingw32-gcc"
+          WIN_CERTIFICATE_KEY: ${{ secrets.WIN_CERTIFICATE_KEY }}
+          WIN_CERTIFICATE_PUB: ${{ secrets.WIN_CERTIFICATE_PUB }}
       - name: Upload Windows binary
         uses: actions/upload-artifact@v3
         with:
@@ -94,7 +99,7 @@ jobs:
           sed -i.bak "s|$SED_SEARCH|$SED_REPLACE1\\n$SED_REPLACE2|" vendor/github.com/ziutek/ftdi/device.go
       - name: Build
         run: |
-          go build -ldflags '-s -w'
+          go build -v -ldflags '-s -w'
           zip -9 g64drive-mac-amd64.zip g64drive
       - name: Upload Linux binary
         uses: actions/upload-artifact@v3
