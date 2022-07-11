@@ -39,12 +39,13 @@ jobs:
       - name: Build Linux
         run: |
           go build -v --tags 'netgo osusergo' -ldflags '-s -w -extldflags "-static"'
+          tar cvzf g64drive-linux-amd64.tar.gz g64drive
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
       - name: Upload Linux binary
         uses: actions/upload-artifact@v3
         with:
-          name: g64drive-linux-amd64.tar.gz
+          name: g64drive-linux-amd64
           path: g64drive
       - name: Build Windows
         run: |
@@ -52,6 +53,7 @@ jobs:
           echo "$WIN_CERTIFICATE_KEY" | base64 --decode > cert.key
           echo "$WIN_CERTIFICATE_PUB" | base64 --decode > cert.pub
           osslsigncode sign -certs cert.pub -key cert.key -t http://timestamp.digicert.com -in g64drive.unsigned.exe -out g64drive.exe
+          zip -9 g64drive-windows-amd64.zip g64drive.exe
         env: 
           GOOS: windows
           GOARCH: amd64
@@ -62,7 +64,7 @@ jobs:
       - name: Upload Windows binary
         uses: actions/upload-artifact@v3
         with:
-          name: g64drive-windows-amd64.zip
+          name: g64drive-windows-amd64
           path: g64drive.exe
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -70,7 +72,7 @@ jobs:
         with:
           draft: true
           files: |
-            g64drive-linux-amd64.zip
+            g64drive-linux-amd64.tar.gz
             g64drive-windows-amd64.zip
 
   Build-Mac:
@@ -98,10 +100,11 @@ jobs:
       - name: Build
         run: |
           go build -v -ldflags '-s -w'
+          zip -9 g64drive-mac-amd64.zip g64drive
       - name: Upload Linux binary
         uses: actions/upload-artifact@v3
         with:
-          name: g64drive-mac-amd64.zip
+          name: g64drive-mac-amd64
           path: g64drive
       - name: Release
         uses: softprops/action-gh-release@v1
