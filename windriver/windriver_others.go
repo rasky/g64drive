@@ -10,6 +10,6 @@ func Elevate() {
 	panic("unreachable")
 }
 
-func Install() {
+func Install() error {
 	panic("unreachable")
 }
