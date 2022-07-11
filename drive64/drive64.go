@@ -25,7 +25,7 @@ var (
 
 func init() {
 	if runtime.GOOS == "windows" {
-		ErrUnknownDevice = errors.New(ErrUnknownDevice.Error() + "\nInstall a libusb-compatible driver using Zadig (https://zadig.akeo.ie)")
+		ErrUnknownDevice = errors.New(ErrUnknownDevice.Error() + "\nInstall a correct driver using \"g64drive driverinstall\"")
 	}
 }
 

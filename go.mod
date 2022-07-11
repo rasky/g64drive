@@ -11,6 +11,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/zhuyie/golzf v0.0.0-20161112031142-8387b0307ade
 	github.com/ziutek/ftdi v0.0.1
+	golang.org/x/sys v0.0.0-20220708085239-5a0f0661e09d // indirect
 	gopkg.in/ini.v1 v1.62.0
 	gopkg.in/restruct.v1 v1.0.0-20190323193435-3c2afb705f3c
 )

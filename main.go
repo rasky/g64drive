@@ -14,12 +14,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/c2h5oh/datasize"
 	"github.com/rasky/g64drive/drive64"
+	"github.com/rasky/g64drive/windriver"
 	"github.com/schollz/progressbar/v2"
 	"github.com/spf13/cobra"
 )
@@ -675,6 +677,21 @@ func cmdDebug(cmd *cobra.Command, args []string) error {
 	})
 }
 
+func cmdDriverInstall(cmd *cobra.Command, args []string) error {
+	if !windriver.Search() {
+		return nil
+	}
+
+	_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
+	if err != nil {
+		fmt.Println("Elevating to administrator privilege...")
+		windriver.Elevate()
+		return nil
+	}
+
+	return windriver.Install()
+}
+
 func main() {
 	var cmdList = &cobra.Command{
 		Use:          "list",
@@ -798,8 +815,17 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 		Short: "debug a running program using libdragon/UNFLoader protocol",
 		Example: `  g64drive debug
 	-- see the output of the program`,
-		RunE:         cmdDebug,
-		SilenceUsage: true,
+		RunE: cmdDebug,
+	}
+
+	var cmdDriverInstall = &cobra.Command{
+		Use:   "driverinstall",
+		Short: "install Windows drivers for 64drive",
+		Long: `This command will attempt to perform an automatic driver installation for a 64drive device.
+Make sure 64drive is connected to the PC before running.
+The driver that will be installed is the standard Microsoft WinUSB driver, which is used by g64drive.
+No proprietary FTDI/D2XX is required and will not be installed.`,
+		RunE: cmdDriverInstall,
 	}
 
 	var rootCmd = &cobra.Command{
@@ -807,6 +833,9 @@ By default, the original name is used (eg: firmware.bin), but a different file n
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
 	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdSaveType, cmdFirmware, cmdDebug)
+	if runtime.GOOS == "windows" {
+		rootCmd.AddCommand(cmdDriverInstall)
+	}
 	if rootCmd.Execute() != nil {
 		os.Exit(1)
 	}
