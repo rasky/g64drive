@@ -115,12 +115,15 @@ func (d *drive64Device) Read(buf []byte) (int, error) {
 	// This does not conform with Go io.Reader protocol (eg: they make
 	// io.ReadFull stuck), so we want to retry a few times, and eventually
 	// return a busy error.
-	for retry := 0; retry < 5; retry++ {
+	wait := 1 * time.Millisecond
+	for retry := 0; retry < 8; retry++ {
 		n, err := d.Device.Read(buf)
 		if n == 0 && err == nil {
 			// Sleep before trying again. A little sleep is required at least
 			// on HW1 where the hardware seems slower in processing requests.
-			time.Sleep(5 * time.Millisecond)
+			// Also, some delays are necessary when using in a VM.
+			time.Sleep(wait)
+			wait *= 2
 			continue
 		}
 		return n, err
