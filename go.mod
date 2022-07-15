@@ -10,10 +10,8 @@ require (
 	github.com/smartystreets/goconvey v1.7.2 // indirect
 	github.com/spf13/cobra v0.0.5
 	github.com/zhuyie/golzf v0.0.0-20161112031142-8387b0307ade
-	github.com/ziutek/ftdi v0.0.1
-	golang.org/x/sys v0.0.0-20220708085239-5a0f0661e09d // indirect
+	github.com/ziutek/ftdi v0.0.2-0.20220711104520-2a14cdf0a420
+	golang.org/x/sys v0.0.0-20220708085239-5a0f0661e09d
 	gopkg.in/ini.v1 v1.62.0
 	gopkg.in/restruct.v1 v1.0.0-20190323193435-3c2afb705f3c
 )
-
-replace github.com/ziutek/ftdi => github.com/pabigot/ftdi v0.0.2-0.20220708175016-f8ae45117403
