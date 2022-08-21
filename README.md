@@ -1,20 +1,19 @@
-## g64drive - a Linux/Mac tool for operating 64drive by Retroactive
+## g64drive - a Windows/Linux/Mac tool for operating 64drive by Retroactive
 
 ### Installation (binary)
+
+Single-file executable download:
+
+ * Download [Windows 64-bit binary](https://github.com/rasky/g64drive/releases/latest/download/g64drive-windows-amd64.zip)
+ * Download [Linux 64-bit binary](https://github.com/rasky/g64drive/releases/latest/download/g64drive-linux-amd64.tar.gz)
+ * Download [macOS 64-bit binary](https://github.com/rasky/g64drive/releases/latest/download/g64drive-mac-amd64.zip)
 
 Through package managers:
 
  * Mac (x86/M1): `brew install rasky/tap/g64drive`
  * Arch Linux: install `g64drive` from [AUR](https://aur.archlinux.org/packages/g64drive/)
 
-For other systems, g64drive ships as a static binary on both Linux and macOS,
-with no additional dependencies required. Just download it and put it in your
-`PATH` (eg: `/usr/local/bin`):
-
- * Download [Linux 64-bit binary](https://github.com/rasky/g64drive/releases/download/v0.3/g64drive-linux64.binary)
- * Download [macOS 64-bit binary](https://github.com/rasky/g64drive/releases/download/v0.3/g64drive-mac.binary)
-
-No driver installation or udev configuration is required. The binary works
+No driver installation or udev configuration is required. On Linux/Mac, the binary works
 without sudo, thanks to libusb.
 
 ### Installation (source)
