@@ -116,7 +116,7 @@ func (d *drive64Device) Read(buf []byte) (int, error) {
 	// io.ReadFull stuck), so we want to retry a few times, and eventually
 	// return a busy error.
 	wait := 1 * time.Millisecond
-	for retry := 0; retry < 10; retry++ {
+	for retry := 0; retry < 12; retry++ {
 		n, err := d.Device.Read(buf)
 		if n == 0 && err == nil {
 			// Sleep before trying again. A little sleep is required at least
