@@ -24,6 +24,7 @@ import (
 	"github.com/rasky/g64drive/windriver"
 	"github.com/schollz/progressbar/v2"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var (
@@ -37,6 +38,9 @@ var (
 	flagByteswapD    int
 	flagByteswapU    int
 	flagFwExtractOut string
+
+	pflagAutoCic  *pflag.Flag
+	pflagAutoSave *pflag.Flag
 )
 
 type sizeUnit struct {
@@ -367,10 +371,10 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	}
 
 	// --autocic defaults to true when uploading a ROM to CARTROM at offset 0
-	if !flagAutoCic && bank == drive64.BankCARTROM && offset == 0 {
+	if !pflagAutoCic.Changed && bank == drive64.BankCARTROM && offset == 0 {
 		flagAutoCic = true
 	}
-	if !flagAutoSave && bank == drive64.BankCARTROM && offset == 0 {
+	if !pflagAutoSave.Changed && bank == drive64.BankCARTROM && offset == 0 {
 		flagAutoSave = true
 	}
 
@@ -719,6 +723,8 @@ func main() {
 	cmdUpload.Flags().BoolVarP(&flagAutoSave, "autosave", "S", false, "autoset save tyep after upload (default: true if uploading a ROM)")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
+	pflagAutoCic = cmdUpload.Flag("autocic")
+	pflagAutoSave = cmdUpload.Flag("autosave")
 
 	var cmdDownload = &cobra.Command{
 		Use:     "download [file]",
