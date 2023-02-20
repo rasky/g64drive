@@ -107,11 +107,11 @@ func NewCICFromString(name string) (CIC, error) {
 	case "6101":
 		return CIC6101, nil
 	case "6102":
-		return CIC6101, nil
+		return CIC6102, nil
 	case "7101":
 		return CIC7101, nil
 	case "7102":
-		return CIC7101, nil
+		return CIC7102, nil
 	case "6103", "7103", "X103", "x103":
 		return CICX103, nil
 	case "6105", "7105", "X105", "x105":
