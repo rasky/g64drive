@@ -115,15 +115,17 @@ func (d *drive64Device) Read(buf []byte) (int, error) {
 	// This does not conform with Go io.Reader protocol (eg: they make
 	// io.ReadFull stuck), so we want to retry a few times, and eventually
 	// return a busy error.
-	wait := 1 * time.Millisecond
-	for retry := 0; retry < 12; retry++ {
+	for retry := 0; retry < 4; retry++ {
+		t0 := time.Now()
 		n, err := d.Device.Read(buf)
 		if n == 0 && err == nil {
-			// Sleep before trying again. A little sleep is required at least
-			// on HW1 where the hardware seems slower in processing requests.
-			// Also, some delays are necessary when using in a VM.
-			time.Sleep(wait)
-			wait *= 2
+			// If the Read timeout too fast, sleep a little bit before retrying
+			// to avoid spin-looping too fast. This is hardware/OS/driver-dependent
+			// so try to be resilient.
+			t1 := time.Since(t0)
+			if t1 < 5*time.Millisecond {
+				time.Sleep(5*time.Millisecond - t1)
+			}
 			continue
 		}
 		return n, err
@@ -369,7 +371,8 @@ func (d *Device) CmdFifoRead(ctx context.Context) (typ uint8, data []byte, err e
 		if _, err = d.usb.Read(head[:]); err == nil {
 			break
 		} else if err == ErrFrozen {
-			time.Sleep(10 * time.Millisecond)
+			// No data received. Hopefully it's not really frozen but simply
+			// idle. Try again.
 			continue
 		} else {
 			return
