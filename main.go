@@ -33,14 +33,16 @@ var (
 	flagSize         sizeUnit
 	flagAutoCic      bool
 	flagAutoSave     bool
+	flagAutoExtended bool
 	flagBank         string
 	flagQuiet        bool
 	flagByteswapD    int
 	flagByteswapU    int
 	flagFwExtractOut string
 
-	pflagAutoCic  *pflag.Flag
-	pflagAutoSave *pflag.Flag
+	pflagAutoCic      *pflag.Flag
+	pflagAutoSave     *pflag.Flag
+	pflagAutoExtended *pflag.Flag
 )
 
 type sizeUnit struct {
@@ -365,17 +367,42 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 	offset := uint32(flagOffset.size)
 	vprintf("offset: %v\n", offset)
 
-	rommd5 := md5.New()
-	if err := upload(dev, io.TeeReader(bs.NewReader(f), rommd5), size, bank, offset, filepath.Base(args[0])); err != nil {
-		return err
-	}
-
 	// --autocic defaults to true when uploading a ROM to CARTROM at offset 0
 	if !pflagAutoCic.Changed && bank == drive64.BankCARTROM && offset == 0 {
 		flagAutoCic = true
 	}
 	if !pflagAutoSave.Changed && bank == drive64.BankCARTROM && offset == 0 {
 		flagAutoSave = true
+	}
+
+	// --extended defaults to true when uploading a ROM to CARTROM at offset 0, if the ROM is larger than 64MB
+	// Otherwise, the ROM would uploaded correctly but the data would be inaccessible.
+	if !pflagAutoExtended.Changed && bank == drive64.BankCARTROM && offset == 0 && size > 64*1024*1024 {
+		if hwvar, fwver, _, err := dev.CmdVersionRequest(); err == nil && hwvar == drive64.VarRevA {
+			// Return an appropriate error message for HW1, taking into account that the user doesn't
+			// probably know what extended mode is.
+			return errors.New("ROMs larger than 64 MiB not supported on 64drive HW1")
+		} else if fwver < 206 {
+			return errors.New("ROMs larger than 64 MiB not supported on 64drive firmware < 2.06")
+		}
+		flagAutoExtended = true
+	}
+
+	if flagAutoExtended {
+		vprintf("Set extended mode\n")
+		if hwvar, fwver, _, err := dev.CmdVersionRequest(); err == nil && hwvar == drive64.VarRevA {
+			return errors.New("extended mode not supported on 64drive HW1")
+		} else if fwver < 206 {
+			return errors.New("extended mode not supported on 64drive firmware < 2.06")
+		} else if err := dev.CmdSetExtended(true); err != nil {
+			return err
+		}
+	}
+
+	vprintf("uploading\n")
+	rommd5 := md5.New()
+	if err := upload(dev, io.TeeReader(bs.NewReader(f), rommd5), size, bank, offset, filepath.Base(args[0])); err != nil {
+		return err
 	}
 
 	if flagAutoCic {
@@ -563,6 +590,31 @@ func cmdSaveType(cmd *cobra.Command, args []string) error {
 
 }
 
+func cmdExtended(cmd *cobra.Command, args []string) error {
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+
+	var extended bool
+	switch args[0] {
+	case "t", "true", "1":
+		extended = true
+	}
+
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+	vprintf("Extended mode: %v\n", extended)
+
+	if hwvar, fwver, _, err := dev.CmdVersionRequest(); err == nil && hwvar == drive64.VarRevA {
+		return errors.New("extended mode not supported on 64drive HW1")
+	} else if fwver < 206 {
+		return errors.New("extended mode not supported on 64drive firmware < 2.06")
+	} else {
+		return dev.CmdSetExtended(extended)
+	}
+}
+
 func fwCmd(filename string, cb func(rpk *drive64.RPK) error) error {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -720,11 +772,13 @@ func main() {
 	cmdUpload.Flags().VarP(&flagSize, "size", "s", "size of data to upload (default: file size)")
 	cmdUpload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
 	cmdUpload.Flags().BoolVarP(&flagAutoCic, "autocic", "c", false, "autoset CIC after upload (default: true if uploading a ROM)")
-	cmdUpload.Flags().BoolVarP(&flagAutoSave, "autosave", "S", false, "autoset save tyep after upload (default: true if uploading a ROM)")
+	cmdUpload.Flags().BoolVarP(&flagAutoSave, "autosave", "S", false, "autoset save type after upload (default: true if uploading a ROM)")
+	cmdUpload.Flags().BoolVarP(&flagAutoExtended, "extended", "e", false, "set extended mode after upload (default: true if uploading a >64Mb ROM)")
 	cmdUpload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdUpload.Flags().IntVarP(&flagByteswapU, "byteswap", "w", -1, "byteswap format: 0=none, 2=16bit, 4=32bit, -1=autodetect")
 	pflagAutoCic = cmdUpload.Flag("autocic")
 	pflagAutoSave = cmdUpload.Flag("autosave")
+	pflagAutoExtended = cmdUpload.Flag("extended")
 
 	var cmdDownload = &cobra.Command{
 		Use:     "download [file]",
@@ -775,6 +829,21 @@ The save type can be specified using one of the following names:
 		SilenceUsage: true,
 	}
 	cmdSaveType.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+
+	var cmdExtended = &cobra.Command{
+		Use:     "extended [bool]",
+		Aliases: []string{"ext"},
+		Short:   "enabel or disabled the 64drive extended mode",
+		Long: `Extended mode allows 64drive to expose the full 240 MiB of SDRAM as ROM to the N64.
+This is required to run ROMs larger than 64 MiB, because otherwise the upper part of the ROM would not
+be accessible. Please notice that extended mode is only available on 64Drive HW2 with firmware >= 2.06.`,
+		Example: `  g64drive extended true     
+    -- enable extended mode.`,
+		RunE:         cmdExtended,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdExtended.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 
 	var cmdFirmwareInfo = &cobra.Command{
 		Use:   "info [file.rpk]",
@@ -838,7 +907,7 @@ No proprietary FTDI/D2XX is required and will not be installed.`,
 		Use: "g64drive",
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdSaveType, cmdFirmware, cmdDebug)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdSaveType, cmdExtended, cmdFirmware, cmdDebug)
 	if runtime.GOOS == "windows" {
 		rootCmd.AddCommand(cmdDriverInstall)
 	}

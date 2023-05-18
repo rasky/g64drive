@@ -255,6 +255,14 @@ func (d *Device) CmdSetSaveType(st SaveType) error {
 	return d.SendCmd(CmdSetSaveType, args[:], nil, nil)
 }
 
+func (d *Device) CmdSetExtended(enable bool) error {
+	var args [1]uint32
+	if enable {
+		args[0] = 1
+	}
+	return d.SendCmd(CmdSetExtended, args[:], nil, nil)
+}
+
 func idealChunkSize(size int64) int {
 	switch {
 	case size >= 16*1024*1024:

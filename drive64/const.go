@@ -20,6 +20,8 @@ const (
 	CmdSetCicType Cmd = 0x72
 	// CmdSetSaveType sets the save emulation
 	CmdSetSaveType Cmd = 0x70
+	// CmdSetExtended sets the CI extended mode (to use the whole 256Mb of SDRAM)
+	CmdSetExtended Cmd = 0x74
 	// CmdVersionRequest requests the hardware and firmware version
 	CmdVersionRequest Cmd = 0x80
 	// CmdUpgradeStart starts a firmware upgrade
