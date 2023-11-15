@@ -3,7 +3,6 @@ package drive64
 import (
 	"errors"
 	"fmt"
-	"hash/crc32"
 )
 
 //go:generate stringer -type=Cmd,Bank,CIC,SaveType,UpgradeStatus -output=const_string.go
@@ -86,6 +85,10 @@ const (
 	CICX105 CIC = 5
 	CICX106 CIC = 6
 	CIC5101 CIC = 7
+	CIC8303 CIC = 8
+	CIC8401 CIC = 9
+	CIC5167 CIC = 10
+	CICDDUS CIC = 11
 )
 
 // Save emulation types supported by 64drive
@@ -122,6 +125,14 @@ func NewCICFromString(name string) (CIC, error) {
 		return CICX106, nil
 	case "5101":
 		return CIC5101, nil
+	case "8303":
+		return CIC8303, nil
+	case "8401":
+		return CIC8401, nil
+	case "5167":
+		return CIC5167, nil
+	case "DDUE":
+		return CICDDUS, nil
 	default:
 		return 0, errors.New("invalid CIC variant")
 	}
@@ -129,21 +140,44 @@ func NewCICFromString(name string) (CIC, error) {
 
 // NewCICFromHeader detects a CIC variant from a ROM header
 func NewCICFromHeader(header []uint8) (CIC, error) {
-	crc := crc32.ChecksumIEEE(header[0x40:0x1000])
-	switch crc {
-	case 0x6170A4A1:
+	header = header[0x40:0x1000]
+
+	switch IPL2Checksum(header, 0x3F) {
+	case 0x45cc73ee317a:
 		return CIC6101, nil
-	case 0x90BB6CB5:
+	case 0xa536c0f1d859:
 		return CIC6102, nil
-	case 0x0B050EE0:
-		return CICX103, nil
-	case 0x98BC2C86:
-		return CICX105, nil
-	case 0xACC8580A:
-		return CICX106, nil
-	default:
-		return 0, fmt.Errorf("cannot detect CIC from ROM header (%08x)", crc)
+	case 0x44160ec5d9af:
+		return CIC7102, nil
 	}
+
+	switch IPL2Checksum(header, 0x78) {
+	case 0x586fd4709867:
+		return CICX103, nil
+	}
+
+	switch IPL2Checksum(header, 0x91) {
+	case 0x8618a45bc2d3:
+		return CICX105, nil
+	}
+
+	switch IPL2Checksum(header, 0x85) {
+	case 0x2bbad4e6eb74:
+		return CICX106, nil
+	}
+
+	switch IPL2Checksum(header, 0xDD) {
+	case 0x32b294e2ab90:
+		return CIC8303, nil
+	case 0x6ee8d9e84970:
+		return CIC8401, nil
+	case 0x083c6c77e0b1:
+		return CIC5167, nil
+	case 0x05ba2ef0a5f1:
+		return CICDDUS, nil
+	}
+
+	return 0, errors.New("cannot detect CIC from ROM header")
 }
 
 func NewSaveTypeFromString(name string) (SaveType, error) {

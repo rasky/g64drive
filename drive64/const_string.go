@@ -12,6 +12,7 @@ func _() {
 	_ = x[CmdDumpToPc-48]
 	_ = x[CmdSetCicType-114]
 	_ = x[CmdSetSaveType-112]
+	_ = x[CmdSetExtended-116]
 	_ = x[CmdVersionRequest-128]
 	_ = x[CmdUpgradeStart-132]
 	_ = x[CmdUpgradeReport-133]
@@ -22,12 +23,13 @@ const (
 	_Cmd_name_1 = "CmdDumpToPc"
 	_Cmd_name_2 = "CmdSetSaveType"
 	_Cmd_name_3 = "CmdSetCicType"
-	_Cmd_name_4 = "CmdVersionRequest"
-	_Cmd_name_5 = "CmdUpgradeStartCmdUpgradeReport"
+	_Cmd_name_4 = "CmdSetExtended"
+	_Cmd_name_5 = "CmdVersionRequest"
+	_Cmd_name_6 = "CmdUpgradeStartCmdUpgradeReport"
 )
 
 var (
-	_Cmd_index_5 = [...]uint8{0, 15, 31}
+	_Cmd_index_6 = [...]uint8{0, 15, 31}
 )
 
 func (i Cmd) String() string {
@@ -40,11 +42,13 @@ func (i Cmd) String() string {
 		return _Cmd_name_2
 	case i == 114:
 		return _Cmd_name_3
-	case i == 128:
+	case i == 116:
 		return _Cmd_name_4
+	case i == 128:
+		return _Cmd_name_5
 	case 132 <= i && i <= 133:
 		i -= 132
-		return _Cmd_name_5[_Cmd_index_5[i]:_Cmd_index_5[i+1]]
+		return _Cmd_name_6[_Cmd_index_6[i]:_Cmd_index_6[i+1]]
 	default:
 		return "Cmd(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
@@ -84,11 +88,15 @@ func _() {
 	_ = x[CICX105-5]
 	_ = x[CICX106-6]
 	_ = x[CIC5101-7]
+	_ = x[CIC8303-8]
+	_ = x[CIC8401-9]
+	_ = x[CIC5167-10]
+	_ = x[CICDDUS-11]
 }
 
-const _CIC_name = "CIC6101CIC6102CIC7101CIC7102CICX103CICX105CICX106CIC5101"
+const _CIC_name = "CIC6101CIC6102CIC7101CIC7102CICX103CICX105CICX106CIC5101CIC8303CIC8401CIC5167CICDDUS"
 
-var _CIC_index = [...]uint8{0, 7, 14, 21, 28, 35, 42, 49, 56}
+var _CIC_index = [...]uint8{0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84}
 
 func (i CIC) String() string {
 	if i >= CIC(len(_CIC_index)-1) {
@@ -152,7 +160,7 @@ var (
 
 func (i UpgradeStatus) String() string {
 	switch {
-	case 0 <= i && i <= 10:
+	case i <= 10:
 		return _UpgradeStatus_name_0[_UpgradeStatus_index_0[i]:_UpgradeStatus_index_0[i+1]]
 	case 12 <= i && i <= 15:
 		i -= 12
