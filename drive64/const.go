@@ -27,6 +27,18 @@ const (
 	CmdUpgradeStart Cmd = 0x84
 	// CmdUpgradeReport returns information on the ongoing firmware upgrade
 	CmdUpgradeReport Cmd = 0x85
+	// CmdStandAloneEnter causes the device to enter standalone mode
+	CmdStandAloneEnter Cmd = 0x88
+	// CmdStandAloneLeave causes the device to leave standalone mode
+	CmdStandAloneLeave Cmd = 0x89
+	// CmdStandAlonePiRead32 performs a 32bit IO read on PI bus
+	CmdStandAlonePiRead32 Cmd = 0x90
+	// CmdStandAlonePiWrite32 performs a 32bit IO write on PI bus
+	CmdStandAlonePiWrite32 Cmd = 0x91
+	// CmdStandAlonePiReadBurst performs burst read on PI bus
+	CmdStandAlonePiReadBurst Cmd = 0x92
+	// CmdStandAlonePiWriteBurst performs burst write on PI bus
+	CmdStandAlonePiWriteBurst Cmd = 0x93
 )
 
 // Variant represent the hardware variant (revision)
@@ -204,7 +216,7 @@ func NewSaveTypeFromString(name string) (SaveType, error) {
 // UpgradeStatus represents the current status of the firmware upgrade
 type UpgradeStatus uint8
 
-// These are the possible upgrade status that can occur during a firwmare upgrade.
+// These are the possible upgrade status that can occur during a firmware upgrade.
 // To read the current upgrade status, use Device.CmdUpgradeReport.
 const (
 	UpgradeReset     UpgradeStatus = 0x0

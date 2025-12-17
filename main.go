@@ -21,6 +21,8 @@ import (
 
 	"github.com/c2h5oh/datasize"
 	"github.com/rasky/g64drive/drive64"
+	"github.com/rasky/g64drive/ultrasave"
+	"github.com/rasky/g64drive/ultrasave/flash"
 	"github.com/rasky/g64drive/windriver"
 	"github.com/schollz/progressbar/v2"
 	"github.com/spf13/cobra"
@@ -28,17 +30,22 @@ import (
 )
 
 var (
-	flagVerbose      bool
-	flagOffset       sizeUnit
-	flagSize         sizeUnit
-	flagAutoCic      bool
-	flagAutoSave     bool
-	flagAutoExtended bool
-	flagBank         string
-	flagQuiet        bool
-	flagByteswapD    int
-	flagByteswapU    int
-	flagFwExtractOut string
+	flagVerbose          bool
+	flagOffset           sizeUnit
+	flagSize             sizeUnit
+	flagAutoCic          bool
+	flagAutoSave         bool
+	flagAutoExtended     bool
+	flagBank             string
+	flagQuiet            bool
+	flagByteswapD        int
+	flagByteswapU        int
+	flagFwExtractOut     string
+	flagPiAddress        uint32
+	flagPiSize           sizeUnit
+	flagPiBurstLen       int
+	flagPiByteswapD      int
+	flagFlashClearStatus bool
 
 	pflagAutoCic      *pflag.Flag
 	pflagAutoSave     *pflag.Flag
@@ -81,6 +88,11 @@ func vprintf(s string, args ...interface{}) {
 	}
 }
 
+func timeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	printf("%s took %s\n", name, elapsed)
+}
+
 func flagBankParse() (drive64.Bank, error) {
 	switch flagBank {
 	case "rom":
@@ -101,7 +113,7 @@ func flagBankParse() (drive64.Bank, error) {
 }
 
 // safeSigIntContext executes function f with a context which is canceled when CTRL+C is called.
-// This allows to for safe CTRL+C cancelation for functions that can't be aborted at any moment.
+// This allows to for safe CTRL+C cancellation for functions that can't be aborted at any moment.
 func safeSigIntContext(f func(ctx context.Context) error) error {
 	ctx := context.Background()
 
@@ -126,6 +138,22 @@ func safeSigIntContext(f func(ctx context.Context) error) error {
 		err = errors.New("SIGINT caught, exiting")
 	}
 	return err
+}
+
+func withStandaloneMode(dev *drive64.Device, f func() error) error {
+	// Check firmware version and verify if it's new enough
+	if _, fwver, _, err := dev.CmdVersionRequest(); err == nil {
+		if fwver < 203 {
+			return fmt.Errorf("\"g64drive ultrasave\" requires 64drive firmware >= 2.03, found: %v\nDownload a newer firmware from http://64drive.retroactive.be, and then run \"g64drive firmware upgrade\" to upgrade", fwver)
+		}
+	}
+
+	if err := dev.CmdStandAloneEnter(); err != nil {
+		return err
+	}
+	defer dev.CmdStandAloneLeave()
+
+	return f()
 }
 
 func cmdList(cmd *cobra.Command, args []string) error {
@@ -479,7 +507,7 @@ func cmdUpload(cmd *cobra.Command, args []string) error {
 						fmt.Printf("WARNING: the ROM requested a 1Mbit SRAM savetype, which is not supported by 64drive\n")
 						st = drive64.SaveNone
 					default:
-						vprintf("WARNING: invalid ED64 ROM confing header value: %02x\n", cfg)
+						vprintf("WARNING: invalid ED64 ROM config header value: %02x\n", cfg)
 					}
 				}
 			}
@@ -523,7 +551,7 @@ func cmdDownload(cmd *cobra.Command, args []string) error {
 
 	size := flagSize.size
 	if size < 0 {
-		return errors.New("invalid size value (negative number")
+		return errors.New("invalid size value (negative number)")
 	}
 	vprintf("size: %v\n", size)
 
@@ -748,6 +776,374 @@ func cmdDriverInstall(cmd *cobra.Command, args []string) error {
 	return windriver.Install()
 }
 
+func downloadPi(dev *drive64.Device, w io.Writer, size int64, address uint32, burstLength int, pbdesc string) error {
+	var pbw io.Writer
+	pbw = os.Stdout
+	if flagQuiet {
+		pbw = ioutil.Discard
+	}
+	pb := progressbar.NewOptions64(int64(size),
+		progressbar.OptionSetDescription(pbdesc),
+		progressbar.OptionSetWriter(pbw))
+	mw := io.MultiWriter(w, pb)
+
+	return safeSigIntContext(func(ctx context.Context) error {
+		defer fmt.Println()
+
+		buf := make([]byte, burstLength)
+		for size > 0 && ctx.Err() == nil {
+			sz := burstLength
+			if int64(sz) > size {
+				sz = int(size)
+			}
+
+			if err := dev.CmdStandAlonePiReadBurst(address, buf); err != nil {
+				return err
+			}
+
+			read, err := mw.Write(buf[:sz])
+			if err != nil {
+				return err
+			} else if read != sz {
+				panic("provided writer does not respect io.Writer interface")
+			}
+
+			address += uint32(read)
+			size -= int64(read)
+		}
+
+		return ctx.Err()
+	})
+}
+
+func cmdUltraSaveDownload(cmd *cobra.Command, args []string) error {
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+
+	var bs drive64.ByteSwapper
+	if flagPiByteswapD == 0 || flagPiByteswapD == 2 || flagPiByteswapD == 4 {
+		bs = drive64.ByteSwapper(flagPiByteswapD)
+	} else {
+		return errors.New("invalid byteswap value")
+	}
+	vprintf("byteswap: %v\n", bs)
+
+	f, err := os.Create(args[0])
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	size := flagPiSize.size
+	if size < 0 {
+		return errors.New("invalid size value (negative number)")
+	}
+	vprintf("size: %v\n", size)
+
+	address := flagPiAddress
+	vprintf("address: %v\n", address)
+
+	burstLen := flagPiBurstLen
+	vprintf("burst size: %v\n", burstLen)
+
+	return withStandaloneMode(dev, func() error {
+		return downloadPi(dev, bs.NewWriter(f), size, address, burstLen, filepath.Base(args[0]))
+
+	})
+}
+
+func cmdUltraSaveProbe(cmd *cobra.Command, args []string) error {
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+
+	return withStandaloneMode(dev, func() error {
+		address := uint32(0x10000000)
+		pi_dom_cfg, err := dev.CmdStandAlonePiRead32(address)
+		if err != nil {
+			return err
+		}
+		printf("Probing cart ROM @ %08x: %08x\n", address, pi_dom_cfg)
+
+		// Try to deduce ROM size by probing different addresses with 1MB granularity.
+		// use of 0x4DA5 offset in address is semi random, as it leads to open bus value 0x4DA54DA5
+		// which is not a valid MIPS instruction.
+		// XXX: This logic doesn't handle mirroring.
+		var rom_size sizeUnit
+		last_data := uint32(0x0)
+		var counter = 0
+		for address := uint32(0x10004DA5); address < uint32(0x20000000); address += uint32(0x100000) {
+
+			data, err := dev.CmdStandAlonePiRead32(address)
+			printf("Probed %08x: %08x\n", address, data)
+			if err != nil {
+				return err
+			}
+
+			// Open Bus result: nothing to read in here, we can stop probing that range
+			if data == uint32(0x4DA54DA5) {
+				break
+			}
+
+			// Some (non standard carts don't have the open bus behavior) but returns the same data
+			// like 0xFFFFFFFF. So if we get more than 5 times the same value, assume that we've reached
+			// the end of ROM 5 increments ago.
+			if data == last_data {
+				counter += 1
+				if counter >= 5 {
+					rom_size.size -= int64(5 * 0x100000)
+					break
+				}
+			} else {
+				counter = 0
+			}
+
+			last_data = data
+			rom_size.size += int64(0x100000)
+		}
+
+		printf("Guessing a ROM size of %v\n", rom_size)
+		return nil
+	})
+}
+
+func cmdFlashSiliconId(cmd *cobra.Command, args []string) error {
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+
+	return withStandaloneMode(dev, func() error {
+		fla, err := flash.New(ultrasave.Drive64ParallelInterfaceAdapter{dev})
+		if err != nil {
+			return err
+		}
+
+		siliconID, err := fla.SiliconID()
+		if err != nil {
+			return err
+		}
+
+		printf("Silicon ID: %x - Manufacturer: %s Device: %s\n", siliconID, siliconID.Manufacturer(), siliconID.Device())
+		return nil
+	})
+}
+
+func cmdFlashStatus(cmd *cobra.Command, args []string) error {
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+
+	return withStandaloneMode(dev, func() error {
+		fla, err := flash.New(ultrasave.Drive64ParallelInterfaceAdapter{dev})
+		if err != nil {
+			return err
+		}
+
+		if flagFlashClearStatus {
+			err := fla.ClearStatus()
+			if err != nil {
+				return err
+			}
+
+			printf("Flash status cleared\n")
+
+		} else {
+			status, err := fla.Status()
+			if err != nil {
+				return err
+			}
+
+			printf("Flash status: %02x\n", status)
+		}
+
+		return nil
+	})
+}
+
+func cmdFlashRead(cmd *cobra.Command, args []string) error {
+	f, err := os.Create(args[0])
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+
+	return withStandaloneMode(dev, func() error {
+		fla, err := flash.New(ultrasave.Drive64ParallelInterfaceAdapter{dev})
+		if err != nil {
+			return err
+		}
+
+		flashSize := fla.Layout().ChipSize()
+
+		var bs drive64.ByteSwapper
+		if flagPiByteswapD == 0 || flagPiByteswapD == 2 || flagPiByteswapD == 4 {
+			bs = drive64.ByteSwapper(flagPiByteswapD)
+		} else {
+			return errors.New("invalid byteswap value")
+		}
+		vprintf("byteswap: %v\n", bs)
+
+		offset := int(flagOffset.size)
+		if offset < 0 {
+			return errors.New("invalid offset value (negative number)")
+		}
+		if offset >= flashSize {
+			return errors.New("invalid offset value (too big)")
+		}
+		vprintf("offset: %v\n", offset)
+
+		size := int(flagSize.size)
+		if size < 0 {
+			return errors.New("invalid size value (negative number)")
+		}
+		if size == 0 {
+			size = flashSize - offset
+		}
+
+		if offset+size > flashSize {
+			printf("truncating to flash size")
+			size = flashSize - offset
+		}
+		vprintf("size: %v\n", size)
+		if size == 0 {
+			printf("nothing to write")
+			return nil
+		}
+
+		var pbw io.Writer
+		pbw = os.Stdout
+		if flagQuiet {
+			pbw = ioutil.Discard
+		}
+		pb := progressbar.NewOptions64(int64(size),
+			progressbar.OptionSetDescription(filepath.Base(args[0])),
+			progressbar.OptionSetWriter(pbw))
+		mw := io.MultiWriter(bs.NewWriter(f), pb)
+
+		return safeSigIntContext(func(ctx context.Context) error {
+			defer fmt.Println()
+
+			data, err := func() ([]byte, error) {
+				defer timeTrack(time.Now(), "read")
+				return fla.Read(ctx, offset, size)
+			}()
+			if err != nil {
+				return err
+			}
+
+			// FIXME: do proper progression by passing mw to fla.Read
+			read, err := mw.Write(data[:])
+			if err != nil {
+				return err
+			} else if read != len(data[:]) {
+				panic("provided writer does not respect io.Writer interface")
+			}
+
+			return ctx.Err()
+		})
+	})
+}
+
+func cmdFlashWrite(cmd *cobra.Command, args []string) error {
+	// don't use ReadFile because we want to support reading from infinite files (such as /dev/zero)
+	f, err := os.Open(args[0])
+	if err != nil {
+		return err
+	}
+	defer f.Close() // ignore error on close, but good enough because we're not writing
+
+	dev, err := drive64.NewDeviceSingle()
+	if err != nil {
+		return err
+	}
+	defer dev.Close()
+	vprintf("64drive serial: %v\n", dev.Description().Serial)
+
+	return withStandaloneMode(dev, func() error {
+		fla, err := flash.New(ultrasave.Drive64ParallelInterfaceAdapter{dev})
+		if err != nil {
+			return err
+		}
+
+		flashSize := fla.Layout().ChipSize()
+
+		// read at most flashSize data from file
+		data, err := io.ReadAll(io.LimitReader(f, int64(flashSize)))
+
+		var bs drive64.ByteSwapper
+		if flagPiByteswapD == 0 || flagPiByteswapD == 2 || flagPiByteswapD == 4 {
+			bs = drive64.ByteSwapper(flagPiByteswapD)
+		} else {
+			return errors.New("invalid byteswap value")
+		}
+		vprintf("byteswap: %v\n", bs)
+
+		offset := int(flagOffset.size)
+		if offset < 0 {
+			return errors.New("invalid offset value (negative number)")
+		}
+		if offset >= flashSize {
+			return errors.New("invalid offset value (too big)")
+		}
+		vprintf("offset: %v\n", offset)
+
+		size := int(flagSize.size)
+		if size < 0 {
+			return errors.New("invalid size value (negative number)")
+		}
+		if size > len(data) {
+			return errors.New("invalid size value (too big)")
+		}
+
+		if size == 0 {
+			size = flashSize - offset
+		}
+
+		if offset+size > flashSize {
+			printf("truncating to flash size")
+			size = flashSize - offset
+		}
+		vprintf("size: %v\n", size)
+		if size == 0 {
+			printf("nothing to write")
+			return nil
+		}
+		data = data[:size]
+
+		// TODO: show progress bar ?
+		return safeSigIntContext(func(ctx context.Context) error {
+			defer fmt.Println()
+
+			if err := func() error {
+				defer timeTrack(time.Now(), "write")
+				return fla.Write(ctx, offset, data)
+
+			}(); err != nil {
+				return err
+			}
+
+			return ctx.Err()
+		})
+	})
+}
+
 func main() {
 	var cmdList = &cobra.Command{
 		Use:          "list",
@@ -790,9 +1186,9 @@ Supported banks are: rom, sram256, sram768, flash, flash_pokstad2, eeprom.`,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 	}
-	cmdDownload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory at which the file will be uploaded")
+	cmdDownload.Flags().VarP(&flagOffset, "offset", "o", "offset in memory from which to start the download")
 	cmdDownload.Flags().VarP(&flagSize, "size", "s", "size of data to download")
-	cmdDownload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be uploaded")
+	cmdDownload.Flags().StringVarP(&flagBank, "bank", "b", "rom", "bank where data should be downloaded")
 	cmdDownload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
 	cmdDownload.Flags().IntVarP(&flagByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
 	cmdDownload.MarkFlagRequired("size")
@@ -804,8 +1200,8 @@ Supported banks are: rom, sram256, sram768, flash, flash_pokstad2, eeprom.`,
 		Long: `Change the variant of CIC that the 64drive emulates, possibly autodetecting it from the current ROM header.
 The variant type can be specified using its name, such as "6103". By specifying "auto", the current ROM header
 will be transferred from 64drive and analyzed, and the correct CIC variant will be automatically selected.`,
-		Example: `  g64drive cic 6105     
-    -- sets CIC emulation to the 6105 variant.  
+		Example: `  g64drive cic 6105
+    -- sets CIC emulation to the 6105 variant.
 
   g64drive cic auto
     -- autodetect and set CIC type from the currently-loaded ROM header.`,
@@ -822,7 +1218,7 @@ will be transferred from 64drive and analyzed, and the correct CIC variant will 
 		Long: `Change the variant of save memory that the 64drive emulates.
 The save type can be specified using one of the following names:
 "none", "eeprom4kbit", "eeprom16kbit", "sram256kbit", "flash1mbit", "sram768kbit", "flash1mbit_pokstad2".`,
-		Example: `  g64drive savetype eeprom16kbit     
+		Example: `  g64drive savetype eeprom16kbit
     -- sets save type emulation to EEPROM with 16Kbit of space.`,
 		RunE:         cmdSaveType,
 		Args:         cobra.ExactArgs(1),
@@ -849,7 +1245,7 @@ be accessible. Please notice that extended mode is only available on 64Drive HW2
 		Use:   "info [file.rpk]",
 		Short: "show information on 64drive firmware file",
 		Example: `  g64drive firmware info 64drive_firm_hw2_205.rpk
-	-- show information on the specified firwmare file.`,
+	-- show information on the specified firmware file.`,
 		RunE:         cmdFirmwareInfo,
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
@@ -903,11 +1299,84 @@ No proprietary FTDI/D2XX is required and will not be installed.`,
 		RunE: cmdDriverInstall,
 	}
 
+	var cmdUltraSaveProbe = &cobra.Command{
+		Use:   "probe",
+		Short: "probe ultrasave cart",
+		RunE:  cmdUltraSaveProbe,
+	}
+
+	var cmdUltraSaveDownload = &cobra.Command{
+		Use:          "download [file]",
+		Short:        "download data from cart plugged into ultrasave",
+		RunE:         cmdUltraSaveDownload,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdUltraSaveDownload.Flags().Uint32VarP(&flagPiAddress, "address", "a", uint32(0x10000000), "pi address from which to start the download")
+	cmdUltraSaveDownload.Flags().VarP(&flagPiSize, "size", "s", "size of data to download")
+	cmdUltraSaveDownload.Flags().IntVarP(&flagPiBurstLen, "burstlen", "b", 512, "burst length")
+	cmdUltraSaveDownload.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdUltraSaveDownload.Flags().IntVarP(&flagPiByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
+	cmdUltraSaveDownload.MarkFlagRequired("address")
+	cmdUltraSaveDownload.MarkFlagRequired("size")
+
+	var cmdFlash = &cobra.Command{
+		Use:   "flash",
+		Short: "flash functions",
+	}
+
+	var cmdFlashSiliconId = &cobra.Command{
+		Use:          "id",
+		Short:        "Print flash SiliconID",
+		RunE:         cmdFlashSiliconId,
+		SilenceUsage: true,
+	}
+
+	var cmdFlashStatus = &cobra.Command{
+		Use:          "status",
+		Short:        "Print/Clear flash Status",
+		RunE:         cmdFlashStatus,
+		SilenceUsage: true,
+	}
+	cmdFlashStatus.Flags().BoolVarP(&flagFlashClearStatus, "clear", "c", false, "clear status")
+
+	var cmdFlashRead = &cobra.Command{
+		Use:          "read [file]",
+		Short:        "Read flash data",
+		RunE:         cmdFlashRead,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdFlashRead.Flags().VarP(&flagOffset, "offset", "o", "offset in flash from which to start readiing data")
+	cmdFlashRead.Flags().VarP(&flagSize, "size", "s", "size of data to write (default: chip size)")
+	cmdFlashRead.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdFlashRead.Flags().IntVarP(&flagPiByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
+
+	var cmdFlashWrite = &cobra.Command{
+		Use:          "write [file]",
+		Short:        "Write flash data",
+		RunE:         cmdFlashWrite,
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+	}
+	cmdFlashWrite.Flags().VarP(&flagOffset, "offset", "o", "offset in flash at which to file will be written")
+	cmdFlashWrite.Flags().VarP(&flagSize, "size", "s", "size of data to write (default: file size)")
+	cmdFlashWrite.Flags().BoolVarP(&flagVerbose, "verbose", "v", false, "be verbose")
+	cmdFlashWrite.Flags().IntVarP(&flagPiByteswapD, "byteswap", "w", 0, "byteswap format: 0=none, 2=16bit, 4=32bit")
+
+	cmdFlash.AddCommand(cmdFlashSiliconId, cmdFlashStatus, cmdFlashRead, cmdFlashWrite)
+
+	var cmdUltraSave = &cobra.Command{
+		Use:   "ultrasave",
+		Short: "ultra save functions",
+	}
+	cmdUltraSave.AddCommand(cmdFlash, cmdUltraSaveProbe, cmdUltraSaveDownload)
+
 	var rootCmd = &cobra.Command{
 		Use: "g64drive",
 	}
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "do not show any output unless an error occurs")
-	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdSaveType, cmdExtended, cmdFirmware, cmdDebug)
+	rootCmd.AddCommand(cmdList, cmdUpload, cmdDownload, cmdCic, cmdSaveType, cmdExtended, cmdFirmware, cmdDebug, cmdUltraSave)
 	if runtime.GOOS == "windows" {
 		rootCmd.AddCommand(cmdDriverInstall)
 	}

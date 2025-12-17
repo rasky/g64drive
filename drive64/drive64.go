@@ -181,9 +181,9 @@ func (d *Device) Close() error {
 	return d.usb.Close()
 }
 
-// SendCmd sends a raw command to 64drive. This is a low-level method, most
-// clients should use one of the Cmd* methods.
-func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
+// SendCmdNoCmp sends a raw command (without Completion Packet) to 64drive.
+// This is a low-level method, most clients should use one of the Cmd* methods.
+func (d *Device) SendCmdNoCmp(cmd Cmd, args []uint32, in []byte, out []byte) error {
 	var buf bytes.Buffer
 	var abuf [4]byte
 
@@ -207,12 +207,26 @@ func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+// SendCmd sends a raw command (with Completion Packet) to 64drive.
+// This is a low-level method, most clients should use one of the Cmd* methods.
+func (d *Device) SendCmd(cmd Cmd, args []uint32, in []byte, out []byte) error {
+	if err := d.SendCmdNoCmp(cmd, args, in, out); err != nil {
+		return err
+	}
+
+	// expect and check Completion Packet (CMP)
+	var abuf [4]byte
 	if _, err := io.ReadFull(&d.usb, abuf[:]); err != nil {
 		return err
 	}
 	if abuf[0] != 0x43 || abuf[1] != 0x4D || abuf[2] != 0x50 || abuf[3] != byte(cmd) {
 		return fmt.Errorf("SendCmd: invalid completion packet (%x)", abuf)
 	}
+
 	return nil
 }
 
@@ -417,4 +431,102 @@ func (d *Device) CmdFifoRead(ctx context.Context) (typ uint8, data []byte, err e
 
 	err = ctx.Err()
 	return
+}
+
+// CmdStandAloneEnter causes the device to enter standalone mode.
+// In this special mode, bus emulation is disabled, and instead
+// the 64drive unit will act as PI and SI bus master (like a real N64 would).
+// This mode requires the use of the UltraSave adapter.
+// Also firmware must be at least 2.03.
+// ErrUnsupported will be returned if firmware version is below 2.03.
+// FIXME?: add a Device.mode {Normal,StandAlone} member (or any suitable
+// mechanism) to track current mode so we can add some precondition checks in
+// functions requiring standalone mode and allow deferred call to
+// CmdStandAloneLeave to leave 64drive in normal state when we close the
+// device.
+func (d *Device) CmdStandAloneEnter() error {
+	_, fwver, _, err := d.CmdVersionRequest()
+	if err != nil {
+		return err
+	}
+	// Check firmware version and verify if it's new enough
+	if fwver < 203 {
+		return ErrUnsupported
+	}
+
+	return d.SendCmd(CmdStandAloneEnter, nil, nil, nil)
+}
+
+// CmdStandAloneLeave leave standalone mode and returns to normal mode.
+func (d *Device) CmdStandAloneLeave() error {
+	return d.SendCmd(CmdStandAloneLeave, nil, nil, nil)
+}
+
+// CmdStandAlonePiRead32 performs a 32bit IO read on PI bus.
+// 64drive must be in standalone mode.
+func (d *Device) CmdStandAlonePiRead32(address uint32) (data uint32, err error) {
+	var buf [4]byte
+	var args [1]uint32
+	args[0] = address
+	if err = d.SendCmd(CmdStandAlonePiRead32, args[:], nil, buf[:]); err != nil {
+		return
+	}
+
+	data = binary.BigEndian.Uint32(buf[:])
+	return
+}
+
+// CmdStandAlonePiWrite32 performs a 32bit IO write on PI bus.
+// 64drive must be in standalone mode.
+func (d *Device) CmdStandAlonePiWrite32(address, data uint32) error {
+	var args [2]uint32
+	args[0] = address
+	args[1] = data
+	return d.SendCmd(CmdStandAlonePiWrite32, args[:], nil, nil)
+}
+
+// CmdStandAlonePiReadBurst performs burst reads on PI bus.
+// 64drive must be in standalone mode.
+// burst length must be supported by the device connected at specified PI address.
+// This burst length likely corresponds to the PI_BSD "PageSize" value.
+// * Retail ROM : 512 bytes
+func (d *Device) CmdStandAlonePiReadBurst(address uint32, data []byte) error {
+	// 64drive seems to only supports burst of length multiple of 32bits.
+	burstLength := len(data)
+	if burstLength%4 != 0 {
+		return ErrUnsupported
+	}
+
+	var cmdargs [2]uint32
+	cmdargs[0] = address
+	cmdargs[1] = uint32(burstLength / 4) // expressed in number of 32bit words
+
+	return d.SendCmdNoCmp(CmdStandAlonePiReadBurst, cmdargs[:], nil, data)
+}
+
+// CmdStandAlonePiWriteBurst performs burst write on PI bus.
+// 64drive must be in standalone mode.
+// burst length must be supported by the device connected at specified PI address.
+// This burst length likely corresponds to the PI_BSD "PageSize" value.
+func (d *Device) CmdStandAlonePiWriteBurst(address uint32, data []byte) error {
+	// PiWriteBurst doesn't work on firmware <2.04
+	_, fwver, _, err := d.CmdVersionRequest()
+	if err != nil {
+		return err
+	}
+	if fwver < 204 {
+		return ErrUnsupported
+	}
+
+	// 64drive seems to only supports burst of length multiple of 32bits.
+	burstLength := len(data)
+	if burstLength%4 != 0 {
+		return ErrUnsupported
+	}
+
+	var cmdargs [2]uint32
+	cmdargs[0] = address
+	cmdargs[1] = uint32(burstLength / 4) // expressed in number of 32bit words
+
+	return d.SendCmdNoCmp(CmdStandAlonePiWriteBurst, cmdargs[:], data, nil)
 }

@@ -16,6 +16,12 @@ func _() {
 	_ = x[CmdVersionRequest-128]
 	_ = x[CmdUpgradeStart-132]
 	_ = x[CmdUpgradeReport-133]
+	_ = x[CmdStandAloneEnter-136]
+	_ = x[CmdStandAloneLeave-137]
+	_ = x[CmdStandAlonePiRead32-144]
+	_ = x[CmdStandAlonePiWrite32-145]
+	_ = x[CmdStandAlonePiReadBurst-146]
+	_ = x[CmdStandAlonePiWriteBurst-147]
 }
 
 const (
@@ -26,10 +32,14 @@ const (
 	_Cmd_name_4 = "CmdSetExtended"
 	_Cmd_name_5 = "CmdVersionRequest"
 	_Cmd_name_6 = "CmdUpgradeStartCmdUpgradeReport"
+	_Cmd_name_7 = "CmdStandAloneEnterCmdStandAloneLeave"
+	_Cmd_name_8 = "CmdStandAlonePiRead32CmdStandAlonePiWrite32CmdStandAlonePiReadBurstCmdStandAlonePiWriteBurst"
 )
 
 var (
 	_Cmd_index_6 = [...]uint8{0, 15, 31}
+	_Cmd_index_7 = [...]uint8{0, 18, 36}
+	_Cmd_index_8 = [...]uint8{0, 21, 43, 67, 92}
 )
 
 func (i Cmd) String() string {
@@ -49,6 +59,12 @@ func (i Cmd) String() string {
 	case 132 <= i && i <= 133:
 		i -= 132
 		return _Cmd_name_6[_Cmd_index_6[i]:_Cmd_index_6[i+1]]
+	case 136 <= i && i <= 137:
+		i -= 136
+		return _Cmd_name_7[_Cmd_index_7[i]:_Cmd_index_7[i+1]]
+	case 144 <= i && i <= 147:
+		i -= 144
+		return _Cmd_name_8[_Cmd_index_8[i]:_Cmd_index_8[i+1]]
 	default:
 		return "Cmd(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
@@ -70,11 +86,11 @@ const _Bank_name = "BankCARTROMBankSRAM256BankSRAM768BankFLASHBankFLASH_POKSTAD2
 var _Bank_index = [...]uint8{0, 11, 22, 33, 42, 60, 70}
 
 func (i Bank) String() string {
-	i -= 1
-	if i >= Bank(len(_Bank_index)-1) {
-		return "Bank(" + strconv.FormatInt(int64(i+1), 10) + ")"
+	idx := int(i) - 1
+	if i < 1 || idx >= len(_Bank_index)-1 {
+		return "Bank(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _Bank_name[_Bank_index[i]:_Bank_index[i+1]]
+	return _Bank_name[_Bank_index[idx]:_Bank_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -99,10 +115,11 @@ const _CIC_name = "CIC6101CIC6102CIC7101CIC7102CICX103CICX105CICX106CIC5101CIC83
 var _CIC_index = [...]uint8{0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84}
 
 func (i CIC) String() string {
-	if i >= CIC(len(_CIC_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_CIC_index)-1 {
 		return "CIC(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _CIC_name[_CIC_index[i]:_CIC_index[i+1]]
+	return _CIC_name[_CIC_index[idx]:_CIC_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
@@ -122,10 +139,11 @@ const _SaveType_name = "SaveNoneSaveEeprom4KbitSaveEeprom16KbitSaveSRAM256KbitSa
 var _SaveType_index = [...]uint8{0, 8, 23, 39, 54, 71, 86, 112}
 
 func (i SaveType) String() string {
-	if i >= SaveType(len(_SaveType_index)-1) {
+	idx := int(i) - 0
+	if i < 0 || idx >= len(_SaveType_index)-1 {
 		return "SaveType(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _SaveType_name[_SaveType_index[i]:_SaveType_index[i+1]]
+	return _SaveType_name[_SaveType_index[idx]:_SaveType_index[idx+1]]
 }
 func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
